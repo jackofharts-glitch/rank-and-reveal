@@ -1,7 +1,7 @@
 {
-  "name": "rank-and-reveal",
+  "name": "best-guess",
   "version": "1.0.0",
-  "description": "A multiplayer party game: rank 5 cards, then everyone guesses your order.",
+  "description": "Best guess? - a multiplayer party game: rank 5 cards, then everyone guesses your order.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

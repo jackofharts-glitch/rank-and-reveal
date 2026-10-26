@@ -2,7 +2,7 @@
 'use strict';
 
 /* =====================================================================
-   Rank & Reveal — phone client
+   Best guess? — phone client
    Talks to the server with POST /api/<action> and listens on an
    EventSource stream (/api/stream) for live game state.
    ===================================================================== */
@@ -18,9 +18,10 @@ const ls = {
 const app = $('#app');
 const fmt = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const hue = str => { let h = 7; for (const c of String(str)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+const AVATAR_COLORS = ['#38c27a', '#ec6a72', '#9fd0f5', '#4f8fd0', '#a9e3c4', '#f4a3a8', '#ffffff', '#cfe3f6'];
 const avatar = name => {
   const ch = [...String(name)][0] || '?';
-  return `<span class="avatar" style="background:hsl(${hue(name)} 70% 52%)">${esc(ch.toUpperCase())}</span>`;
+  return `<span class="avatar" style="background:${AVATAR_COLORS[hue(name) % AVATAR_COLORS.length]}">${esc(ch.toUpperCase())}</span>`;
 };
 
 /* ---------- sound & haptics (tiny WebAudio synth, no files) ---------- */
@@ -70,7 +71,7 @@ function sizeCanvas() { const d = window.devicePixelRatio || 1; cv.width = inner
 addEventListener('resize', sizeCanvas); sizeCanvas();
 function confetti(n = 120, mode = 'burst') {
   if (!cx) return;
-  const colors = ['#ffd23f', '#ff4fa3', '#35e0ff', '#38e08c', '#8b5cff', '#ffffff'];
+  const colors = ['#ffffff', '#d8343f', '#38c27a', '#2c6cae', '#111111', '#a9cdee'];
   const d = window.devicePixelRatio || 1, W = cv.width, H = cv.height;
   for (let i = 0; i < n; i++) {
     const p = { c: colors[i % colors.length], s: (6 + Math.random() * 7) * d, r: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.3 };
@@ -201,8 +202,8 @@ function showHome(msg) {
   const name = ls.get('rr_name') || '';
   app.innerHTML = `
   <section class="screen home">
-    <div class="logo">Rank<span>&amp; Reveal</span></div>
-    <p class="tag">Rank 5 things from favorite to least favorite.<br>Everyone else guesses your list. Drama ensues.</p>
+    <img class="logo" src="/logo.png" alt="Best guess?">
+    <p class="tag" data-delay="1000">Rank 5 things from favorite to least favorite.<br>Everyone else guesses your list. Drama ensues.</p>
     ${msg ? `<div class="notice">${esc(msg)}</div>` : ''}
     <div class="panel">
       <label class="lbl" for="name">Your name</label>
@@ -252,6 +253,7 @@ function showHome(msg) {
   if (nb) nb.onclick = () => { location.href = '/'; };
   $('#name').addEventListener('keydown', e => { if (e.key === 'Enter') (urlCode ? jb : cb).click(); });
   const ci = $('#code'); if (ci) ci.addEventListener('keydown', e => { if (e.key === 'Enter') jb.click(); });
+  scribbleAll(true);
 }
 
 /* ---------- render pipeline ---------- */
@@ -280,7 +282,7 @@ function render() {
   if (k !== viewKey) { viewKey = k; clearFx(); window.scrollTo(0, 0); mount(); }
   else renderStrip();
 }
-function mount() {
+function mountInner() {
   const T = S.turn;
   switch (S.phase) {
     case 'lobby': return mountLobby();
@@ -292,6 +294,53 @@ function mount() {
     case 'reveal': return mountReveal();
     case 'final': return mountFinal();
   }
+}
+
+/* ---------- handwriting: headings get "written" letter by letter, a little crooked, like a kid with a crayon ---------- */
+const SCRIBBLE_SEL = '.eyebrow, h2, .bigmsg, .hint, .rankbadge, .who, .verdict, .flipcard .face, #ftitle, .tag, .poolhead, .sectionhead, .bonusline';
+const reduceMotion = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+function scribbleEl(el, startMs) {
+  let t = startMs || 0;
+  if (!el || reduceMotion()) return t;
+  const nodes = [], tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let n = tw.nextNode(); n; n = tw.nextNode()) nodes.push(n);
+  const total = nodes.reduce((a, n) => a + n.nodeValue.replace(/\s+/g, '').length, 0);
+  if (!total) return t;
+  const step = Math.max(18, Math.min(40, 900 / total));   // longer text is written faster
+  for (const node of nodes) {
+    const frag = document.createDocumentFragment();
+    for (const tok of node.nodeValue.split(/(\s+)/)) {
+      if (!tok) continue;
+      if (/^\s+$/.test(tok)) { frag.appendChild(document.createTextNode(tok)); continue; }
+      const w = document.createElement('span'); w.className = 'w';
+      for (const chr of Array.from(tok)) {
+        const c = document.createElement('span'); c.className = 'ch'; c.textContent = chr;
+        c.style.setProperty('--d', Math.round(t) + 'ms');
+        c.style.setProperty('--r', (Math.random() * 5 - 2.5).toFixed(1) + 'deg');   // wobbly letters
+        c.style.setProperty('--y', (Math.random() * 3 - 1.5).toFixed(1) + 'px');    // wandering baseline
+        w.appendChild(c); t += step;
+      }
+      frag.appendChild(w);
+    }
+    node.parentNode.replaceChild(frag, node);
+  }
+  return t;
+}
+function scribbleAll(animate) {
+  if (!animate) return;
+  let t = 0;
+  app.querySelectorAll(SCRIBBLE_SEL).forEach(el => {
+    if (el.dataset.delay !== undefined) scribbleEl(el, +el.dataset.delay);   // fixed start time
+    else t = Math.min(scribbleEl(el, t) + 80, 1400);                         // otherwise write one after another
+  });
+}
+let lastKind = null;
+function mount() {
+  // only play the writing when the screen really changes, not when e.g. a player joins the lobby
+  const kind = S.phase + ':' + (S.turnId || 0) + ':' + (S.reveal ? S.reveal.step : '');
+  const animate = kind !== lastKind; lastKind = kind;
+  mountInner();
+  scribbleAll(animate);
 }
 
 /* ---------- shared bits ---------- */
@@ -334,6 +383,7 @@ function mountLobby() {
   const n = S.players.length, hostP = S.players.find(p => p.isHost);
   app.innerHTML = `
   <section class="screen lobby">
+    <img class="logo small still" src="/logo.png" alt="Best guess?">
     <div class="kicker">Room code</div>
     <div class="roomcode">${esc(S.code)}</div>
     <div class="sharebox"><input class="text" id="linkField" readonly value="${esc(link)}"><button class="btn small" id="copyBtn">Copy link</button></div>
@@ -356,7 +406,7 @@ function mountLobby() {
     try { await navigator.clipboard.writeText(link); toast('Link copied!'); }
     catch (e) { const f = $('#linkField'); f.select(); try { document.execCommand('copy'); toast('Link copied!'); } catch (e2) { toast('Press and hold the link to copy'); } }
   };
-  const sb = $('#shareBtn'); if (sb) sb.onclick = () => navigator.share({ title: 'Rank & Reveal', text: `Join my game of Rank & Reveal! Room ${S.code}`, url: link }).catch(() => {});
+  const sb = $('#shareBtn'); if (sb) sb.onclick = () => navigator.share({ title: 'Best guess?', text: `Join my game of Best guess? Room ${S.code}`, url: link }).catch(() => {});
   const st = $('#startBtn'); if (st) st.onclick = () => { ac(); act('start'); };
   document.querySelectorAll('.kick').forEach(b => { b.onclick = () => { if (confirm('Remove this player?')) act('kick', { target: b.dataset.id }); }; });
   $('#leaveBtn').onclick = async () => { await act('leave'); closeStream(); saveSession(null); location.href = '/'; };
@@ -503,8 +553,8 @@ function mountReveal() {
   <section class="screen stage revealed ${R.finale ? 'finale' : ''}">
     <div class="rankbadge">#${pos.rank}${w ? ' · ' + w : ''}</div>
     <div class="who">${esc(T.rankerName)} ranked…</div>
-    <div class="flipcard"><div class="face">${esc(pos.card)}</div></div>
-    <div class="verdict" style="animation-delay:${base + g.length * per}ms">${verdict}</div>
+    <div class="flipcard"><div class="face" data-delay="350">${esc(pos.card)}</div></div>
+    <div class="verdict" data-delay="${base + g.length * per}">${verdict}</div>
     <div class="guesslist">${g.map((x, i) => `
       <div class="grow ${x.correct ? 'ok' : 'no'}" style="animation-delay:${base + i * per}ms">
         <div class="gname">${esc(x.name)}</div><div class="gguess">${x.card ? esc(x.card) : '—'}</div><div class="gmark">${x.correct ? '✓ +1' : '✗'}</div>
@@ -540,7 +590,7 @@ function mountSummary() {
     <div class="nexthint">${lastTurn ? 'Final results in' : 'Next turn in'} <b id="nextCount">…</b>s</div>
     ${S.isHost ? `<button class="btn primary big" id="hostBtn">${lastTurn ? 'Final results 🏆' : 'Next turn ▶'}</button>` : ''}
   </section>`;
-  if (M.perfectCount) { sfx.fanfare(); confetti(160); buzz([60, 40, 60, 40, 120]); flash('#ffd23f99'); } else sfx.ding();
+  if (M.perfectCount) { sfx.fanfare(); confetti(160); buzz([60, 40, 60, 40, 120]); flash('#ffffffcc'); } else sfx.ding();
   bindHost();
 }
 
@@ -572,7 +622,8 @@ function mountFinal() {
     const t = $('#ftitle'); if (!t) return;
     t.classList.remove('drum');
     t.innerHTML = winners.length > 1 ? `🏆 ${winners.map(esc).join(' & ')}<br>tie for the win!` : `🏆 ${esc(winners[0] || '')} wins!`;
-    sfx.fanfare(); confetti(240); buzz([80, 40, 80, 40, 200]); flash('#ffd23fbb');
+    scribbleEl(t, 0);
+    sfx.fanfare(); confetti(240); buzz([80, 40, 80, 40, 200]); flash('#ffffffcc');
     [900, 1800, 2700].forEach(d => later(() => confetti(90, 'rain'), d));
   }, T);
   later(() => { const a = $('#awards'); if (a) a.classList.add('in'); const h = $('#fhost'); if (h) h.hidden = false; }, T + 700);

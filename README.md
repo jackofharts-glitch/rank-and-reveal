@@ -1,4 +1,4 @@
-# Rank & Reveal
+# Best guess?
 
 A party game for friends and family, played on everyone's own phone.
 
@@ -30,7 +30,7 @@ The game needs a small always-on server, so it can't live on a static host like 
    - Build command: `npm install`
    - Start command: `npm start`
    - (A `render.yaml` is included if you prefer a Blueprint.)
-3. Render gives you a link like `https://rank-and-reveal.onrender.com`. Open it, tap **Create a game**, and send the invite link to everyone.
+3. Render gives you a link like `https://best-guess.onrender.com`. Open it, tap **Create a game**, and send the invite link to everyone.
 
 Free-tier notes:
 - The server goes to sleep after ~15 minutes with no activity. The first visit after that takes a little while to wake up. Games in progress stay awake because every move is a request.
@@ -57,8 +57,15 @@ Free-tier notes:
 - **Host controls:** the host (👑) sees a small button on each screen to skip a stuck turn, jump to the reveal, or move to the next turn. If the host disconnects, someone else takes over.
 - **Sound:** the 🔊 button in the top bar mutes the drumroll and fanfares.
 
+## Look & feel
+
+- **Logo:** `public/logo.png` (and `public/icon.png` for the browser tab). Replace those files to change it.
+- **Font:** Barriecito, loaded from Google Fonts, so phones need an internet connection to see it. Without one the game falls back to a similar handwriting-style font and still works fine.
+- **Colors:** all in the `:root` block at the top of `public/style.css`. The background is the logo blue; red and green are used for wrong and right.
+- **Handwriting effect:** headings are "written" in letter by letter by a small function in `public/app.js` (`scribbleEl`). It switches itself off for people who have reduced motion turned on.
+
 ## Files
 
 - `server.js` — the whole game server (rooms, turns, timers, scoring)
 - `cards.json` — the deck
-- `public/` — the phone interface (`index.html`, `style.css`, `app.js`)
+- `public/` — the phone interface (`index.html`, `style.css`, `app.js`, `logo.png`, `icon.png`)

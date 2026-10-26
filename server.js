@@ -1,6 +1,6 @@
 'use strict';
 /**
- * Rank & Reveal — game server.
+ * Best guess? — game server.
  * Zero dependencies: plain Node. Phones get live updates over Server-Sent Events
  * (GET /api/stream) and send their moves with POST /api/<action>.
  * All rooms live in memory in this one process.
@@ -543,6 +543,8 @@ const STATIC = {
   '/index.html': ['index.html', 'text/html; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
   '/app.js': ['app.js', 'application/javascript; charset=utf-8'],
+  '/logo.png': ['logo.png', 'image/png'],
+  '/icon.png': ['icon.png', 'image/png'],
 };
 
 function sendJson(res, status, obj) {
@@ -669,7 +671,7 @@ process.on('uncaughtException', e => console.error('uncaught:', e));
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n  Rank & Reveal is running\n  ➜ On this computer:  http://localhost:${PORT}`);
+    console.log(`\n  Best guess? is running\n  ➜ On this computer:  http://localhost:${PORT}`);
     for (const list of Object.values(os.networkInterfaces())) {
       for (const i of list || []) {
         if (i.family === 'IPv4' && !i.internal) console.log(`  ➜ Phones on the same Wi-Fi: http://${i.address}:${PORT}`);

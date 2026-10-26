@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: rank-and-reveal
+    name: best-guess
     runtime: node
     plan: free
     buildCommand: npm install
