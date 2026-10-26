@@ -1,0 +1,14 @@
+{
+  "name": "rank-and-reveal",
+  "version": "1.0.0",
+  "description": "A multiplayer party game: rank 5 cards, then everyone guesses your order.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
