@@ -210,7 +210,7 @@ function showHome(msg) {
   app.innerHTML = `
   <section class="screen home">
     <img class="logo" src="/logo.png" alt="Best guess?">
-    <p class="tag" data-delay="1000">Rank 5 things from favorite to least favorite.<br>Everyone else guesses your list. Drama ensues.</p>
+    <p class="tag" data-delay="1000">You're opinion is always right.<br>But does everyone else know that? Can you guess everyone elses wrong preferences??</p>
     ${msg ? `<div class="notice">${esc(msg)}</div>` : ''}
     <div class="panel">
       <label class="lbl" for="name">Your name</label>
