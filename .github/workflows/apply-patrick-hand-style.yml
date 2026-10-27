@@ -1,0 +1,71 @@
+name: Apply Patrick Hand font styling
+on:
+  workflow_dispatch:
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update style.css and README.md for Patrick Hand
+        run: |
+          python3 <<'PYEOF'
+          import io, re
+
+          # --- public/style.css ---
+          p = 'public/style.css'
+          s = io.open(p, encoding='utf-8').read()
+
+          old_comment = '/* Bobby Jones: put the font file in public/fonts (see the README there). Until then the next font is used. */'
+          new_comment = ('/* Patrick Hand: self-hosted hand-drawn marker-style font from Google Fonts\n'
+                         '   (public/fonts/PatrickHand.woff2). It is first in the --hand stack below. */\n'
+                         '/* Bobby Jones: no font files are included, so its @font-face block simply falls\n'
+                         '   through to the next font in the stack. */')
+          assert old_comment in s, 'comment not found'
+          s = s.replace(old_comment, new_comment)
+
+          old_bj = ('@font-face {\n'
+                    '    font-family: "Bobby Jones"; font-weight: 400; font-style: normal; font-display: swap;\n'
+                    '    src: local("Bobby Jones"), url("/fonts/BobbyJones.woff2") format("woff2"), url("/fonts/BobbyJones.woff") format("woff"),\n'
+                    '        url("/fonts/BobbyJones.ttf") format("truetype"), url("/fonts/BobbyJones.otf") format("opentype");\n'
+                    '}')
+          new_bj = (old_bj + '\n'
+                    '@font-face {\n'
+                    '    font-family: "Patrick Hand"; font-weight: 400; font-style: normal; font-display: swap;\n'
+                    '    src: local("Patrick Hand"), url("/fonts/PatrickHand.woff2") format("woff2");\n'
+                    '}')
+          assert old_bj in s, 'bobby jones block not found'
+          s = s.replace(old_bj, new_bj)
+
+          old_hand = '--hand: "Bobby Jones", "Barriecito", "Chalkboard SE", "Marker Felt", "Comic Sans MS", "Comic Neue", cursive;'
+          new_hand = '--hand: "Patrick Hand", "Bobby Jones", "Barriecito", "Chalkboard SE", "Marker Felt", "Comic Sans MS", "Comic Neue", cursive;'
+          assert old_hand in s, '--hand not found'
+          s = s.replace(old_hand, new_hand)
+
+          io.open(p, 'w', encoding='utf-8').write(s)
+          print('style.css updated')
+
+          # --- README.md ---
+          p = 'README.md'
+          s = io.open(p, encoding='utf-8').read()
+          new_font = ('- **Font:** Patrick Hand, a free hand-drawn marker-style font from Google Fonts, self-hosted in '
+                      '`public/fonts/` as `PatrickHand.woff2`. If it ever fails to load, the game falls back to Barriecito '
+                      '(from Google Fonts), then a similar handwriting-style font. (The `@font-face` entry for the paid Bobby '
+                      'Jones font is still in `public/style.css`, but no Bobby Jones files are included, so it is skipped.)')
+          s2, n = re.subn(r'- \*\*Font:\*\* Bobby Jones\..*?handwriting-style font\.', new_font, s, flags=re.S, count=1)
+          assert n == 1, 'README font paragraph not found'
+          io.open(p, 'w', encoding='utf-8').write(s2)
+          print('README.md updated')
+          PYEOF
+      - name: Remove temp workflow and commit
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/apply-patrick-hand-style.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+          git config user.name "jackofharts-glitch"
+          git config user.email "jackhart0911@gmail.com"
+          git add -A
+          git commit -m "Use Patrick Hand as the game font (self-hosted)"
+          git push
