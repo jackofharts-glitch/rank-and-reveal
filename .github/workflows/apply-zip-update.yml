@@ -1,0 +1,32 @@
+name: Apply best-guess__2.zip update
+on:
+  workflow_dispatch:
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract zip to repo root
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/zipout
+          unzip -o best-guess__2.zip -d /tmp/zipout
+          cp -r /tmp/zipout/rank-reveal/. .
+          rm -f best-guess__2.zip
+          rm -f .github/workflows/apply-zip-update.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "jackofharts-glitch"
+          git config user.email "jackhart0911@gmail.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+          else
+            git commit -m "Apply Best guess? update from best-guess__2.zip"
+            git push
+          fi
