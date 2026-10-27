@@ -13,49 +13,55 @@ jobs:
           python3 <<'PYEOF'
           import io, re
 
+          def load(p):
+              s = io.open(p, encoding='utf-8').read()
+              nl = '\r\n' if '\r\n' in s else '\n'
+              return s.replace('\r\n', '\n'), nl
+
+          def save(p, s, nl):
+              io.open(p, 'w', encoding='utf-8', newline='').write(s.replace('\n', nl))
+
           # --- public/style.css ---
           p = 'public/style.css'
-          s = io.open(p, encoding='utf-8').read()
+          s, nl = load(p)
 
-          old_comment = '/* Bobby Jones: put the font file in public/fonts (see the README there). Until then the next font is used. */'
-          new_comment = ('/* Patrick Hand: self-hosted hand-drawn marker-style font from Google Fonts\n'
-                         '   (public/fonts/PatrickHand.woff2). It is first in the --hand stack below. */\n'
-                         '/* Bobby Jones: no font files are included, so its @font-face block simply falls\n'
-                         '   through to the next font in the stack. */')
-          assert old_comment in s, 'comment not found'
-          s = s.replace(old_comment, new_comment)
+          # 1. Replace the Bobby Jones comment with a Patrick Hand comment.
+          s2, n = re.subn(r'/\*\s*Bobby Jones: put the font file in public/fonts.*?\*/',
+                          '/* Patrick Hand: self-hosted hand-drawn marker-style font from Google Fonts\n'
+                          '   (public/fonts/PatrickHand.woff2). It is first in the --hand stack below. */\n'
+                          '/* Bobby Jones: no font files are included, so its @font-face block simply falls\n'
+                          '   through to the next font in the stack. */',
+                          s, count=1, flags=re.S)
+          assert n == 1, 'comment not found'
+          s = s2
 
-          old_bj = ('@font-face {\n'
-                    '    font-family: "Bobby Jones"; font-weight: 400; font-style: normal; font-display: swap;\n'
-                    '    src: local("Bobby Jones"), url("/fonts/BobbyJones.woff2") format("woff2"), url("/fonts/BobbyJones.woff") format("woff"),\n'
-                    '        url("/fonts/BobbyJones.ttf") format("truetype"), url("/fonts/BobbyJones.otf") format("opentype");\n'
-                    '}')
-          new_bj = (old_bj + '\n'
-                    '@font-face {\n'
-                    '    font-family: "Patrick Hand"; font-weight: 400; font-style: normal; font-display: swap;\n'
-                    '    src: local("Patrick Hand"), url("/fonts/PatrickHand.woff2") format("woff2");\n'
-                    '}')
-          assert old_bj in s, 'bobby jones block not found'
-          s = s.replace(old_bj, new_bj)
+          # 2. Add a Patrick Hand @font-face block right after the Bobby Jones block.
+          m = re.search(r'@font-face\s*\{[^}]*"Bobby Jones"[^}]*\}', s)
+          assert m, 'bobby jones block not found'
+          patrick = ('\n@font-face {\n'
+                     '    font-family: "Patrick Hand"; font-weight: 400; font-style: normal; font-display: swap;\n'
+                     '    src: local("Patrick Hand"), url("/fonts/PatrickHand.woff2") format("woff2");\n'
+                     '}')
+          s = s[:m.end()] + patrick + s[m.end():]
 
-          old_hand = '--hand: "Bobby Jones", "Barriecito", "Chalkboard SE", "Marker Felt", "Comic Sans MS", "Comic Neue", cursive;'
-          new_hand = '--hand: "Patrick Hand", "Bobby Jones", "Barriecito", "Chalkboard SE", "Marker Felt", "Comic Sans MS", "Comic Neue", cursive;'
-          assert old_hand in s, '--hand not found'
-          s = s.replace(old_hand, new_hand)
+          # 3. Put Patrick Hand first in the --hand stack.
+          s2, n = re.subn(r'(--hand:\s*)"Bobby Jones",', r'\1"Patrick Hand", "Bobby Jones",', s, count=1)
+          assert n == 1, '--hand not found'
+          s = s2
 
-          io.open(p, 'w', encoding='utf-8').write(s)
+          save(p, s, nl)
           print('style.css updated')
 
           # --- README.md ---
           p = 'README.md'
-          s = io.open(p, encoding='utf-8').read()
+          s, nl = load(p)
           new_font = ('- **Font:** Patrick Hand, a free hand-drawn marker-style font from Google Fonts, self-hosted in '
                       '`public/fonts/` as `PatrickHand.woff2`. If it ever fails to load, the game falls back to Barriecito '
                       '(from Google Fonts), then a similar handwriting-style font. (The `@font-face` entry for the paid Bobby '
                       'Jones font is still in `public/style.css`, but no Bobby Jones files are included, so it is skipped.)')
           s2, n = re.subn(r'- \*\*Font:\*\* Bobby Jones\..*?handwriting-style font\.', new_font, s, flags=re.S, count=1)
           assert n == 1, 'README font paragraph not found'
-          io.open(p, 'w', encoding='utf-8').write(s2)
+          save(p, s2, nl)
           print('README.md updated')
           PYEOF
       - name: Remove temp workflow and commit
