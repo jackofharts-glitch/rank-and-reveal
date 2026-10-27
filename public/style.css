@@ -1,4 +1,10 @@
 /* Best guess? — flat, no gradients. Palette is built from the logo blue (#6ca6db). */
+/* Bobby Jones: put the font file in public/fonts (see the README there). Until then the next font is used. */
+@font-face {
+  font-family: "Bobby Jones"; font-weight: 400; font-style: normal; font-display: swap;
+  src: local("Bobby Jones"), url("/fonts/BobbyJones.woff2") format("woff2"), url("/fonts/BobbyJones.woff") format("woff"),
+       url("/fonts/BobbyJones.ttf") format("truetype"), url("/fonts/BobbyJones.otf") format("opentype");
+}
 :root {
   --blue: #6ca6db;      /* page background (the logo blue) */
   --blue-l: #a9cdee;    /* light tint: empty slots, tracks */
@@ -13,7 +19,7 @@
   --shadow: 0 4px 0 var(--ink);
   --out2: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 2px 2px 0 var(--ink), -2px -2px 0 var(--ink), 2px -2px 0 var(--ink), -2px 2px 0 var(--ink);
   --out3: 3px 0 0 var(--ink), -3px 0 0 var(--ink), 0 3px 0 var(--ink), 0 -3px 0 var(--ink), 3px 3px 0 var(--ink), -3px -3px 0 var(--ink), 3px -3px 0 var(--ink), -3px 3px 0 var(--ink);
-  --hand: "Barriecito", "Chalkboard SE", "Marker Felt", "Comic Sans MS", "Comic Neue", cursive;
+  --hand: "Bobby Jones", "Barriecito", "Chalkboard SE", "Marker Felt", "Comic Sans MS", "Comic Neue", cursive;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html { -webkit-text-size-adjust: 100%; }
@@ -153,13 +159,18 @@ details.how li { margin-bottom: 6px; }
 .chip .cn { display: flex; flex-direction: column; line-height: 1.05; }
 .chip .cn b { font-size: 16px; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip .cn small { color: var(--ink2); font-size: 13px; }
-.chip .st { font-size: 16px; }
+.chip .st { font-size: 12px; letter-spacing: .5px; text-transform: uppercase; border: 2px solid var(--ink); border-radius: 99px; padding: 1px 7px; background: var(--blue-xl); }
+.chip .st-done { background: var(--green); }
+.chip .st-away { background: var(--paper); color: var(--ink2); border-color: var(--ink2); }
+.chip .st-locked { background: var(--blue-l); }
 
 .wait, .lockedscreen { align-items: stretch; }
 .thinking { font-size: 76px; text-align: center; animation: float 2.2s ease-in-out infinite; line-height: 1; margin-top: 10px; }
 .bigmsg { font-size: 32px; }
 .myrank { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .myrank li { display: flex; align-items: center; gap: 10px; background: var(--paper); border: 2px solid var(--ink); border-radius: 12px; padding: 8px; font-size: 20px; }
+.myrank .txt { border-radius: 6px; }
+.myrank.hidden .txt { color: transparent; background: var(--ink2); user-select: none; -webkit-user-select: none; }
 .myrank .num { width: 32px; height: 32px; font-size: 18px; border-radius: 10px; }
 
 /* ---------- THE REVEAL ---------- */
@@ -279,3 +290,30 @@ details.how li { margin-bottom: 6px; }
 @media (prefers-reduced-motion: reduce) {
   .bignum, .mysterycard, .thinking, .trophy, .dots i, #ftitle.drum, .logo, .ch { animation: none !important; }
 }
+
+/* ---------- pictures that replace emojis ---------- */
+.ico { height: 1.15em; width: auto; vertical-align: -0.2em; }
+.thinking .ico { height: 76px; }
+.trophy .ico { height: 96px; }
+.aicon .ico { height: 34px; }
+.fplace .ico { height: 32px; }
+.crown .ico { height: 22px; }
+#soundBtn .ico { height: 20px; vertical-align: middle; }
+
+/* ---------- settings page ---------- */
+.settings { padding-top: 24px; }
+.stepper { display: flex; align-items: center; justify-content: center; gap: 18px; }
+.stepper .btn { width: 64px; height: 64px; padding: 0; font-size: 34px; }
+.rval { min-width: 90px; text-align: center; font-size: 76px; line-height: 1; color: #fff; text-shadow: var(--out3), 0 5px 0 var(--ink); }
+
+/* ---------- who knows who best ---------- */
+.pairs { display: flex; flex-direction: column; gap: 8px; opacity: 0; transition: opacity .6s; }
+.pairs:empty { display: none; }
+.pairs.in { opacity: 1; }
+.krow { display: flex; align-items: center; gap: 10px; background: var(--paper); border: 2px solid var(--ink); border-radius: 14px; padding: 8px 10px; font-size: 19px; line-height: 1.15; }
+.krow small { display: block; color: var(--ink2); font-size: 14px; }
+.matrix { display: grid; gap: 4px; align-items: center; justify-items: center; background: var(--paper); border: 3px solid var(--ink); border-radius: 16px; padding: 8px; box-shadow: var(--shadow); }
+.matrix .avatar { width: 26px; height: 26px; font-size: 13px; }
+.mc { width: 100%; text-align: center; border: 2px solid var(--ink); border-radius: 8px; padding: 4px 0; font-size: 15px; }
+.m0 { background: var(--paper); } .m1 { background: var(--blue-xl); } .m2 { background: var(--blue-l); } .m3 { background: var(--green-l); } .m4 { background: var(--green); } .mx { border-color: transparent; color: var(--ink2); }
+.mcap { color: var(--ink2); font-size: 14px; text-align: center; }

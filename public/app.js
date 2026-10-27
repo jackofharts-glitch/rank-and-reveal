@@ -59,7 +59,12 @@ const sfx = {
 const buzz = p => { try { if (!muted && navigator.vibrate) navigator.vibrate(p); } catch (e) { /* ignore */ } };
 document.addEventListener('pointerdown', () => ac(), { once: true });
 const soundBtn = $('#soundBtn');
-const paintSound = () => { soundBtn.textContent = muted ? '🔇' : '🔊'; };
+// Picture slots: drop public/icons/<name>.png and it replaces the emoji automatically.
+const EMOJI = { trophy: '🏆', gold: '🥇', silver: '🥈', bronze: '🥉', thinking: '🤔', lock: '🔒', eyes: '👀', sound_on: '🔊', sound_off: '🔇', crown: '👑', mind_reader: '🔮', open_book: '📖', mysterious: '🕵️', friends: '🤝' };
+let ICONS = new Set();
+const ic = name => (ICONS.has(name) ? `<img class="ico" src="/icons/${name}.png" alt="">` : (EMOJI[name] || ''));
+const loadIcons = () => fetch('/icons.json').then(r => r.json()).then(a => { ICONS = new Set(a); }).catch(() => {});
+const paintSound = () => { soundBtn.innerHTML = ic(muted ? 'sound_off' : 'sound_on'); };
 soundBtn.onclick = () => { muted = !muted; ls.set('rr_muted', muted ? '1' : '0'); paintSound(); if (!muted) sfx.ding(); };
 paintSound();
 
@@ -123,6 +128,8 @@ if (session && urlCode && session.room !== urlCode) session = null; // opened a 
 const saveSession = s => { session = s; if (s) ls.set('rr_session', JSON.stringify(s)); else ls.del('rr_session'); };
 
 let S = null, offset = 0, viewKey = null, es = null, lastMsg = 0;
+let settingsOpen = false;                          // host sees the settings page right after creating a game
+let hideRank = ls.get('rr_hide') === '1';          // ranker's "hide my ranking" choice is remembered
 
 async function post(action, body) {
   const r = await fetch('/api/' + action, {
@@ -223,7 +230,7 @@ function showHome(msg) {
         <li>Everyone else sees the same cards and <b>guesses that exact order</b>.</li>
         <li><b>1 point</b> for every card you place in exactly the right spot.</li>
         <li>If someone nails all 5, the ranker gets a <b>bonus</b> — so rank honestly!</li>
-        <li>Everybody takes turns ranking. Most points after 3 rounds wins.</li>
+        <li>Everybody takes turns ranking. The host picks how many rounds. Most points at the end wins.</li>
       </ol>
     </details>
   </section>`;
@@ -243,6 +250,7 @@ function showHome(msg) {
         if (!r.ok) { err.textContent = r.error || 'Something went wrong.'; return; }
         saveSession({ room: r.code, pid: r.pid, name: r.name });
         history.replaceState(null, '', '/' + r.code);
+        settingsOpen = (kind === 'create');
         ac(); openStream();
       })
       .catch(() => { err.textContent = "Couldn't reach the game server. Check your connection."; });
@@ -260,7 +268,7 @@ function showHome(msg) {
 function keyOf(s) {
   const h = s.isHost ? 'H' : '';
   switch (s.phase) {
-    case 'lobby': return 'lobby:' + h + s.players.map(p => p.id + p.name + (p.connected ? 1 : 0)).join('|');
+    case 'lobby': if (settingsOpen && s.isHost) return 'settings'; return 'lobby:' + h + s.players.map(p => p.id + p.name + (p.connected ? 1 : 0)).join('|');
     case 'ranking': return (s.you === s.turn.rankerId ? 'rank-me:' : 'rank-wait:') + s.turnId + h;
     case 'guessing': {
       const T = s.turn;
@@ -278,6 +286,7 @@ function render() {
   $('#topbar').hidden = false;
   $('#roomTag').textContent = 'Room ' + S.code;
   $('#roundTag').textContent = S.phase === 'lobby' ? 'Lobby' : S.phase === 'final' ? 'Final results' : `Round ${S.round}/${S.cfg.rounds} · Turn ${S.turnIndex}/${S.turnsInRound}`;
+  if (!(S.phase === 'lobby' && S.isHost)) settingsOpen = false;
   const k = keyOf(S);
   if (k !== viewKey) { viewKey = k; clearFx(); window.scrollTo(0, 0); mount(); }
   else renderStrip();
@@ -285,7 +294,7 @@ function render() {
 function mountInner() {
   const T = S.turn;
   switch (S.phase) {
-    case 'lobby': return mountLobby();
+    case 'lobby': return (settingsOpen && S.isHost) ? mountSettings() : mountLobby();
     case 'ranking': return S.you === T.rankerId ? mountPlay('rank') : mountWait();
     case 'guessing':
       if (S.you === T.rankerId) return mountGuessOther('watch');
@@ -349,10 +358,10 @@ function stripHTML() {
   const T = S.turn || {}, sub = new Set(T.submitted || []);
   return S.players.map(p => {
     let st = '';
-    if (p.id === T.rankerId) st = S.phase === 'ranking' ? '✍️' : '🔒';
-    else if (S.phase === 'guessing') st = sub.has(p.id) ? '✅' : (p.connected ? '🤔' : '💤');
-    else if (!p.connected) st = '💤';
-    return `<div class="chip ${p.connected ? '' : 'off'} ${p.id === S.you ? 'me' : ''}">${avatar(p.name)}<div class="cn"><b>${esc(p.name)}</b><small>${p.score} pts</small></div><span class="st">${st}</span></div>`;
+    if (p.id === T.rankerId) st = S.phase === 'ranking' ? 'ranking' : 'locked';
+    else if (S.phase === 'guessing') st = sub.has(p.id) ? 'done' : (p.connected ? 'guessing' : 'away');
+    else if (!p.connected) st = 'away';
+    return `<div class="chip ${p.connected ? '' : 'off'} ${p.id === S.you ? 'me' : ''}">${avatar(p.name)}<div class="cn"><b>${esc(p.name)}</b><small>${p.score} pts</small></div>${st ? `<span class="st st-${st}">${st}</span>` : ''}</div>`;
   }).join('');
 }
 function renderStrip() { const el = $('#strip'); if (el) el.innerHTML = stripHTML(); }
@@ -377,6 +386,33 @@ setInterval(() => {
   if (nc && S && S.reveal) nc.textContent = Math.max(0, Math.ceil((S.reveal.nextAt - (Date.now() + offset)) / 1000));
 }, 200);
 
+/* ---------- settings (host) ---------- */
+function mountSettings() {
+  let rounds = S.cfg.rounds;
+  app.innerHTML = `
+  <section class="screen settings">
+    <h2>Game settings</h2>
+    <div class="panel">
+      <div class="lbl">How many rounds?</div>
+      <div class="stepper"><button class="btn" id="rMinus" aria-label="Fewer rounds">−</button><div id="rVal" class="rval"></div><button class="btn" id="rPlus" aria-label="More rounds">+</button></div>
+      <p class="sub center" id="rNote"></p>
+    </div>
+    <button class="btn primary big" id="settingsDone">Continue to the lobby</button>
+  </section>`;
+  const paint = () => {
+    $('#rVal').textContent = rounds;
+    $('#rMinus').disabled = rounds <= 1; $('#rPlus').disabled = rounds >= S.cfg.maxRounds;
+    $('#rNote').textContent = `Every player ranks once per round, so each player gets ${rounds} turn${rounds === 1 ? '' : 's'} as the ranker.`;
+  };
+  $('#rMinus').onclick = () => { if (rounds > 1) { rounds--; sfx.tick(); paint(); } };
+  $('#rPlus').onclick = () => { if (rounds < S.cfg.maxRounds) { rounds++; sfx.tick(); paint(); } };
+  $('#settingsDone').onclick = async () => {
+    const r = await act('settings', { rounds });
+    if (r && r.ok) { settingsOpen = false; viewKey = null; render(); }
+  };
+  paint();
+}
+
 /* ---------- lobby ---------- */
 function mountLobby() {
   const link = location.origin + '/' + S.code;
@@ -387,16 +423,17 @@ function mountLobby() {
     <div class="kicker">Room code</div>
     <div class="roomcode">${esc(S.code)}</div>
     <div class="sharebox"><input class="text" id="linkField" readonly value="${esc(link)}"><button class="btn small" id="copyBtn">Copy link</button></div>
-    ${navigator.share ? '<button class="btn" id="shareBtn">📲 Send invite</button>' : ''}
+    ${navigator.share ? '<button class="btn" id="shareBtn">Send invite</button>' : ''}
     <div class="panel">
       <div class="panelhead"><span>Players</span><span>${n}/${S.cfg.max}</span></div>
       <ul class="plist">${S.players.map(p => `
         <li class="${p.connected ? '' : 'off'}">${avatar(p.name)}<span class="pname">${esc(p.name)}</span>
-        ${p.isHost ? '<span class="crown">👑</span>' : ''}${p.id === S.you ? '<span class="you">you</span>' : ''}
+        ${p.isHost ? `<span class="crown" title="Host">${ic('crown')}</span>` : ''}${p.id === S.you ? '<span class="you">you</span>' : ''}
         ${S.isHost && p.id !== S.you ? `<button class="kick" data-id="${esc(p.id)}" aria-label="Remove ${esc(p.name)}">✕</button>` : ''}</li>`).join('')}
       </ul>
     </div>
-    <p class="rules"><b>${S.cfg.rounds} rounds</b> — everyone ranks once per round. Rankers get <b>${fmt(S.cfg.rankSeconds * 1000)}</b>, guessers <b>${fmt(S.cfg.guessSeconds * 1000)}</b>. <b>+1</b> per card in the exact right spot. If a guesser nails all 5, the ranker earns <b>+${S.cfg.bonus}</b> — so rank honestly!</p>
+    <p class="rules"><b>${S.cfg.rounds} round${S.cfg.rounds === 1 ? '' : 's'}</b> — everyone ranks once per round. Rankers get <b>${fmt(S.cfg.rankSeconds * 1000)}</b>, guessers <b>${fmt(S.cfg.guessSeconds * 1000)}</b>. <b>+1</b> per card in the exact right spot. If a guesser nails all 5, the ranker earns <b>+${S.cfg.bonus}</b> — so rank honestly!</p>
+    ${S.isHost ? '<button class="btn" id="settingsBtn">Game settings</button>' : ''}
     ${S.isHost
       ? `<button class="btn primary big" id="startBtn" ${S.players.filter(p => p.connected).length < S.cfg.min ? 'disabled' : ''}>${n < S.cfg.min ? 'Waiting for friends…' : 'Start game'}</button>`
       : `<div class="waiting">Waiting for ${esc(hostP ? hostP.name : 'the host')} to start…</div>`}
@@ -408,6 +445,7 @@ function mountLobby() {
   };
   const sb = $('#shareBtn'); if (sb) sb.onclick = () => navigator.share({ title: 'Best guess?', text: `Join my game of Best guess? Room ${S.code}`, url: link }).catch(() => {});
   const st = $('#startBtn'); if (st) st.onclick = () => { ac(); act('start'); };
+  const gs = $('#settingsBtn'); if (gs) gs.onclick = () => { settingsOpen = true; viewKey = null; render(); };
   document.querySelectorAll('.kick').forEach(b => { b.onclick = () => { if (confirm('Remove this player?')) act('kick', { target: b.dataset.id }); }; });
   $('#leaveBtn').onclick = async () => { await act('leave'); closeStream(); saveSession(null); location.href = '/'; };
 }
@@ -418,7 +456,7 @@ function mountWait() {
   app.innerHTML = `
   <section class="screen wait">
     <div class="eyebrow">${rn} is ranking</div>
-    <div class="thinking">🤔</div>
+    <div class="thinking">${ic('thinking')}</div>
     <h2 class="bigmsg">5 cards.<br>1 favorite.<br>Zero mercy.</h2>
     <p class="sub center">When ${rn} locks it in, you'll get ${fmt(S.cfg.guessSeconds * 1000)} to guess their exact order.</p>
     ${timerHTML()}
@@ -444,7 +482,7 @@ function mountPlay(mode) {
     <div id="slots" class="slots"></div>
     <div class="poolhead">Tap cards to place them in order</div>
     <div id="pool" class="pool"></div>
-    <button id="submit" class="btn primary big" disabled>${isRank ? 'Lock in my ranking 🔒' : 'Lock in my guess 🔒'}</button>
+    <button id="submit" class="btn primary big" disabled>${isRank ? 'Lock in my ranking' : 'Lock in my guess'}</button>
     ${isRank ? '' : '<div id="strip" class="strip"></div>'}
     ${hostBar(isRank ? 'Skip my turn (host)' : 'Skip to the reveal (host)', isRank ? 'Skip this turn?' : 'End guessing now?')}
   </section>`;
@@ -483,7 +521,7 @@ function mountPlay(mode) {
     if (order.length !== 5) return;
     btn.disabled = true; btn.textContent = 'Locking in…'; sfx.lock(); buzz(20);
     const r = await act('submit', { order: order.slice() });
-    if (!r || !r.ok) { btn.disabled = false; btn.textContent = isRank ? 'Lock in my ranking 🔒' : 'Lock in my guess 🔒'; }
+    if (!r || !r.ok) { btn.disabled = false; btn.textContent = isRank ? 'Lock in my ranking' : 'Lock in my guess'; }
   };
   draw(); renderStrip(); bindHost();
 }
@@ -492,18 +530,25 @@ function mountGuessOther(kind) {
   const T = S.turn, rn = esc(T.rankerName);
   let top = '';
   if (kind === 'watch') {
-    top = `<div class="eyebrow">Your ranking is locked in</div><div class="thinking">🔒</div><h2 class="bigmsg">Now they're guessing…</h2>
-      <ol class="myrank">${T.myRanking.map((c, i) => `<li><span class="num n${i + 1}">${i + 1}</span>${esc(c.text)}</li>`).join('')}</ol>
-      <p class="sub center">Every guesser who nails all 5 earns you <b>+${S.cfg.bonus}</b>. Poker face on. 😐</p>`;
+    top = `<div class="eyebrow">Your ranking is locked in</div><div class="thinking">${ic('lock')}</div><h2 class="bigmsg">Now they're guessing…</h2>
+      <ol class="myrank ${hideRank ? 'hidden' : ''}" id="myrank">${T.myRanking.map((c, i) => `<li><span class="num n${i + 1}">${i + 1}</span><span class="txt">${esc(c.text)}</span></li>`).join('')}</ol>
+      <button class="btn small" id="hideBtn">${hideRank ? 'Show my ranking' : 'Hide my ranking'}</button>
+      <p class="sub center">Every guesser who nails all 5 earns you <b>+${S.cfg.bonus}</b>. Poker face on.</p>`;
   } else if (kind === 'locked') {
-    top = `<div class="eyebrow">Guess locked in</div><div class="thinking">🔒</div><h2 class="bigmsg">Fingers crossed…</h2>
+    top = `<div class="eyebrow">Guess locked in</div><div class="thinking">${ic('lock')}</div><h2 class="bigmsg">Fingers crossed…</h2>
       <p class="sub center">Waiting for the others to finish guessing ${rn}'s list.</p>`;
   } else {
-    top = `<div class="eyebrow">You joined mid-turn</div><div class="thinking">👀</div><h2 class="bigmsg">Sit tight!</h2>
+    top = `<div class="eyebrow">You joined mid-turn</div><div class="thinking">${ic('eyes')}</div><h2 class="bigmsg">Sit tight!</h2>
       <p class="sub center">You'll get your own turn ranking later. Enjoy the reveal.</p>`;
   }
   app.innerHTML = `<section class="screen lockedscreen">${top}${timerHTML()}<div id="strip" class="strip"></div>${hostBar('Skip to the reveal (host)', 'End guessing now?')}</section>`;
   renderStrip(); bindHost();
+  const hb = $('#hideBtn');   // hide/show the ranker's own list so nobody can peek (only changes this screen)
+  if (hb) hb.onclick = () => {
+    hideRank = !hideRank; ls.set('rr_hide', hideRank ? '1' : '0');
+    $('#myrank').classList.toggle('hidden', hideRank);
+    hb.textContent = hideRank ? 'Show my ranking' : 'Hide my ranking';
+  };
 }
 
 /* ---------- the reveal ---------- */
@@ -519,7 +564,7 @@ function tallyHTML(R) {
 function mountReveal() {
   const R = S.reveal, T = S.turn;
   if (R.type === 'summary') return mountSummary();
-  const skipLabel = 'Skip reveal ⏭';
+  const skipLabel = 'Skip reveal';
 
   if (R.type === 'suspense') {
     const w = rankWord(R.rank);
@@ -543,8 +588,8 @@ function mountReveal() {
   const g = pos.guesses, c = g.filter(x => x.correct).length, base = 900, per = 320;
   let verdict = '';
   if (g.length) {
-    if (c === 0) verdict = 'NOBODY saw that coming! 😱';
-    else if (c === g.length) verdict = g.length === 1 ? 'Nailed it! 🎯' : 'EVERYONE knew! 🎯';
+    if (c === 0) verdict = 'NOBODY saw that coming!';
+    else if (c === g.length) verdict = g.length === 1 ? 'Nailed it!' : 'EVERYONE knew!';
     else if (c === 1) verdict = `Only ${esc(g.find(x => x.correct).name)} knew!`;
     else verdict = `${c} of ${g.length} got it!`;
   }
@@ -579,40 +624,52 @@ function mountSummary() {
   <section class="screen summary">
     <h2>${esc(M.rankerName)}'s ranking</h2>
     <ol class="finalrank">${M.ranking.map(r => `<li style="animation-delay:${r.rank * 70}ms"><span class="num n${r.rank}">${r.rank}</span>${esc(r.text)}</li>`).join('')}</ol>
-    ${perfect.length ? `<div class="bonusline">🧠 ${perfect.join(' & ')} ${perfect.length === 1 ? 'went' : 'both went'} <b>5/5</b>!<br>${esc(M.rankerName)} earns <b>+${M.bonus}</b> for being so readable.</div>` : ''}
+    ${perfect.length ? `<div class="bonusline">${perfect.join(' & ')} ${perfect.length === 1 ? 'went' : 'both went'} <b>5/5</b>!<br>${esc(M.rankerName)} earns <b>+${M.bonus}</b> for being so readable.</div>` : ''}
     <div class="sectionhead">Guessing results</div>
     ${M.rows.map(r => `<div class="rrow ${r.perfect ? 'perfect' : ''}"><div class="rname">${avatar(r.name)}<b>${esc(r.name)}</b></div>
-      <div class="pips">${[0, 1, 2, 3, 4].map(i => `<i class="${i < r.correct ? 'on' : ''}"></i>`).join('')}</div><div class="rpts">${r.perfect ? '🧠 ' : ''}+${r.correct}</div></div>`).join('') || '<p class="sub center">No guesses this turn.</p>'}
+      <div class="pips">${[0, 1, 2, 3, 4].map(i => `<i class="${i < r.correct ? 'on' : ''}"></i>`).join('')}</div><div class="rpts">+${r.correct}</div></div>`).join('') || '<p class="sub center">No guesses this turn.</p>'}
     ${M.missed.length ? `<p class="sub center">Sat this one out: ${M.missed.map(esc).join(', ')}</p>` : ''}
     <div class="sectionhead">Scoreboard</div>
     <div class="board">${sorted.map((p, i) => { const d = M.deltas[p.id] || 0; return `
       <div class="brow ${p.id === S.you ? 'me' : ''}"><span class="pos">${i + 1}</span>${avatar(p.name)}<b class="bn">${esc(p.name)}</b>${d ? `<span class="delta">+${d}</span>` : ''}<span class="bs">${p.score}</span></div>`; }).join('')}</div>
     <div class="nexthint">${lastTurn ? 'Final results in' : 'Next turn in'} <b id="nextCount">…</b>s</div>
-    ${S.isHost ? `<button class="btn primary big" id="hostBtn">${lastTurn ? 'Final results 🏆' : 'Next turn ▶'}</button>` : ''}
+    ${S.isHost ? `<button class="btn primary big" id="hostBtn">${lastTurn ? 'Final results' : 'Next turn'}</button>` : ''}
   </section>`;
   if (M.perfectCount) { sfx.fanfare(); confetti(160); buzz([60, 40, 60, 40, 120]); flash('#ffffffcc'); } else sfx.ding();
   bindHost();
 }
 
 /* ---------- final results ---------- */
+// "Who knows who best": a line per player + a grid (rows guess, columns are ranked) with flat colour buckets
+function pairsHTML(P) {
+  if (!P || !P.knows || !P.knows.length) return '';
+  const bucket = v => (v == null ? 'mx' : v < 1 ? 'm0' : v < 2 ? 'm1' : v < 3 ? 'm2' : v < 4 ? 'm3' : 'm4');
+  const lines = P.knows.map(k => `<div class="krow">${avatar(k.name)}<div><b>${esc(k.name)}</b> read <b>${k.best.map(esc).join(' &amp; ')}</b> best<small>${k.avg.toFixed(1)} of 5 cards right on average</small></div></div>`).join('');
+  const head = `<div class="mh"></div>${P.cols.map(c => `<div class="mh">${avatar(c.name)}</div>`).join('')}`;
+  const body = P.rows.map(r => `<div class="mh">${avatar(r.name)}</div>${r.cells.map(v => `<div class="mc ${bucket(v)}">${v == null ? '–' : v.toFixed(1)}</div>`).join('')}`).join('');
+  return `<div class="sectionhead">Who knows who best</div>${lines}
+    <div class="matrix" style="grid-template-columns:34px repeat(${P.cols.length}, 1fr)">${head}${body}</div>
+    <small class="mcap">Each row is a guesser, each column is the person they were guessing. Average cards right out of 5.</small>`;
+}
 function mountFinal() {
   const F = S.final, n = F.standings.length, step = 800;
   const top = n ? F.standings[0].score : 0;
   const winners = F.standings.filter(s => s.winner).map(s => s.name);
-  const medals = ['🥇', '🥈', '🥉'];
+  const medals = [ic('gold'), ic('silver'), ic('bronze')];
   const T = n * step + 1100;
   app.innerHTML = `
   <section class="screen final">
-    <div class="trophy">🏆</div>
+    <div class="trophy">${ic('trophy')}</div>
     <div id="ftitle" class="drum">AND THE WINNER IS…</div>
     <div class="frows">${F.standings.map((s, i) => {
       const delay = (n - 1 - i) * step + 500, w = top ? Math.max(6, Math.round(s.score / top * 100)) : 6;
       return `<div class="frow ${s.winner ? 'win' : ''}" style="animation-delay:${delay}ms"><span class="fplace">${medals[s.place - 1] || s.place}</span>${avatar(s.name)}
         <div class="fmid"><b>${esc(s.name)}</b><div class="fbar"><i style="width:${w}%;animation-delay:${delay + 250}ms"></i></div></div><span class="fscore">${s.score}</span></div>`;
     }).join('')}</div>
-    <div class="awards" id="awards">${F.awards.map(a => `<div class="award"><span class="aicon">${a.icon}</span><div><b>${a.title}: ${esc(a.who)}</b><small>${esc(a.note)}</small></div></div>`).join('')}</div>
+    <div class="awards" id="awards">${F.awards.map(a => `<div class="award"><span class="aicon">${ic(a.icon)}</span><div><b>${a.title}: ${esc(a.who)}</b><small>${esc(a.note)}</small></div></div>`).join('')}</div>
+    <div class="pairs" id="pairs">${pairsHTML(F.pairs)}</div>
     <div id="fhost" hidden>
-      ${S.isHost ? '<button class="btn primary big" id="againBtn">Play again 🔁</button>' : '<div class="waiting">Waiting for the host to start another game…</div>'}
+      ${S.isHost ? '<button class="btn primary big" id="againBtn">Play again</button>' : '<div class="waiting">Waiting for the host to start another game…</div>'}
       <button class="linkbtn" id="leaveBtn2">Leave room</button>
     </div>
   </section>`;
@@ -621,21 +678,22 @@ function mountFinal() {
   later(() => {
     const t = $('#ftitle'); if (!t) return;
     t.classList.remove('drum');
-    t.innerHTML = winners.length > 1 ? `🏆 ${winners.map(esc).join(' & ')}<br>tie for the win!` : `🏆 ${esc(winners[0] || '')} wins!`;
+    t.innerHTML = winners.length > 1 ? `${winners.map(esc).join(' & ')}<br>tie for the win!` : `${esc(winners[0] || '')} wins!`;
     scribbleEl(t, 0);
     sfx.fanfare(); confetti(240); buzz([80, 40, 80, 40, 200]); flash('#ffffffcc');
     [900, 1800, 2700].forEach(d => later(() => confetti(90, 'rain'), d));
   }, T);
-  later(() => { const a = $('#awards'); if (a) a.classList.add('in'); const h = $('#fhost'); if (h) h.hidden = false; }, T + 700);
+  later(() => { ['#awards', '#pairs'].forEach(q => { const a = $(q); if (a) a.classList.add('in'); }); const h = $('#fhost'); if (h) h.hidden = false; }, T + 700);
   const again = $('#againBtn'); if (again) again.onclick = () => act('playAgain');
   $('#leaveBtn2').onclick = async () => { await act('leave'); closeStream(); saveSession(null); location.href = '/'; };
 }
 
 /* ---------- boot ---------- */
 if (session) {
-  app.innerHTML = '<section class="screen"><div class="thinking">⏳</div><p class="sub center">Joining your game…</p></section>';
-  rejoin();
+  app.innerHTML = '<section class="screen"><p class="sub center">Joining your game…</p></section>';
+  loadIcons().then(() => { paintSound(); rejoin(); });
 } else {
   showHome();
+  loadIcons().then(paintSound);
 }
 })();

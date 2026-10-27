@@ -21,6 +21,7 @@ const CFG = {
   GUESS_SECONDS: num(process.env.GUESS_SECONDS, 90),// time for the guessers
   PERFECT_BONUS: num(process.env.PERFECT_BONUS, 3), // ranker bonus for EACH guesser who goes 5/5
   MAX_PLAYERS: 8,
+  MAX_ROUNDS: 10,
   MIN_PLAYERS: 2,
   HAND: 5,
   // reveal pacing (milliseconds)
@@ -35,6 +36,7 @@ const CFG = {
   KEEPALIVE_MS: 15000,
 };
 
+const MAX_ROUNDS = CFG.MAX_ROUNDS;
 const DECK = [...new Set(require('./cards.json').map(s => String(s).trim()).filter(Boolean))];
 if (DECK.length < CFG.HAND) throw new Error('cards.json needs at least ' + CFG.HAND + ' cards');
 
@@ -79,7 +81,7 @@ function sanitize(order, full) {
 
 function newRoom(code) {
   return {
-    code, hostId: null, players: [], phase: 'lobby',
+    code, rounds: CFG.ROUNDS, hostId: null, players: [], phase: 'lobby',
     round: 0, roundIndex: -1, roundOrder: [], baseOrder: [],
     draw: [], turn: null, turnCounter: 0, timer: null,
     history: [], final: null, lastActive: Date.now(),
@@ -129,7 +131,7 @@ function view(room, me) {
   const v = {
     now: Date.now(), code: room.code, phase: room.phase, you: me.id,
     isHost: !!host && host.id === me.id,
-    cfg: { rounds: CFG.ROUNDS, rankSeconds: CFG.RANK_SECONDS, guessSeconds: CFG.GUESS_SECONDS, bonus: CFG.PERFECT_BONUS, min: CFG.MIN_PLAYERS, max: CFG.MAX_PLAYERS },
+    cfg: { rounds: room.rounds, maxRounds: CFG.MAX_ROUNDS, rankSeconds: CFG.RANK_SECONDS, guessSeconds: CFG.GUESS_SECONDS, bonus: CFG.PERFECT_BONUS, min: CFG.MIN_PLAYERS, max: CFG.MAX_PLAYERS },
     round: room.round, turnIndex: room.roundIndex + 1, turnsInRound: room.roundOrder.length,
     turnId: t ? t.id : 0,
     players: room.players.map(p => ({
@@ -189,7 +191,7 @@ function nextTurn(room) {
   room.roundIndex++;
   if (room.roundIndex >= room.roundOrder.length) {
     room.round++;
-    if (room.round > CFG.ROUNDS) return finishGame(room);
+    if (room.round > room.rounds) return finishGame(room);
     room.roundOrder = room.baseOrder.filter(id => getPlayer(room, id));
     room.roundIndex = 0;
   }
@@ -346,6 +348,45 @@ function enterSummary(room) {
   room.timer = setTimeout(() => nextTurn(room), CFG.SUMMARY_MS);
 }
 
+// How well each player reads each other player: pairs[guesser][ranker] = { sum, n } over every turn they shared.
+function computePairs(room) {
+  const pr = {};
+  for (const t of room.history) {
+    for (const r of t.rows) {
+      const a = pr[r.id] || (pr[r.id] = {});
+      const c = a[t.rankerId] || (a[t.rankerId] = { sum: 0, n: 0 });
+      c.sum += r.correct; c.n++;
+    }
+  }
+  const cell = (g, k) => (pr[g] && pr[g][k] && pr[g][k].n ? pr[g][k] : null);
+  const players = room.players.map(p => ({ id: p.id, name: p.name }));
+  const rows = players.map(g => ({
+    id: g.id, name: g.name,
+    cells: players.map(k => { const c = k.id === g.id ? null : cell(g.id, k.id); return c ? Math.round(c.sum / c.n * 10) / 10 : null; }),
+  }));
+  // each player's best "read": the person they guessed best (ties all shown)
+  const knows = [];
+  for (const g of players) {
+    let top = -1, best = [];
+    for (const k of players) {
+      const c = k.id === g.id ? null : cell(g.id, k.id); if (!c) continue;
+      const v = c.sum / c.n;
+      if (v > top + 1e-9) { top = v; best = [k.name]; } else if (Math.abs(v - top) < 1e-9) best.push(k.name);
+    }
+    if (best.length) knows.push({ id: g.id, name: g.name, best, avg: Math.round(top * 10) / 10 });
+  }
+  // the pair that read each other best (both directions combined)
+  let topPair = -1, pairs = [];
+  for (let i = 0; i < players.length; i++) for (let j = i + 1; j < players.length; j++) {
+    const a = cell(players[i].id, players[j].id), b = cell(players[j].id, players[i].id);
+    const n = (a ? a.n : 0) + (b ? b.n : 0); if (!n) continue;
+    const v = ((a ? a.sum : 0) + (b ? b.sum : 0)) / n;
+    if (v > topPair + 1e-9) { topPair = v; pairs = [[players[i].name, players[j].name]]; }
+    else if (Math.abs(v - topPair) < 1e-9) pairs.push([players[i].name, players[j].name]);
+  }
+  return { cols: players, rows, knows, bestPairs: pairs, bestPairAvg: pairs.length ? Math.round(topPair * 10) / 10 : null };
+}
+
 function computeAwards(room) {
   const awards = [];
   const h = room.history;
@@ -368,15 +409,19 @@ function computeAwards(room) {
     }
     return { top, ids };
   };
+  const pairInfo = computePairs(room);
+  if (pairInfo.bestPairs.length && pairInfo.bestPairs.length <= 2 && pairInfo.bestPairAvg > 0) {
+    awards.push({ icon: 'friends', title: 'Best Friends', who: pairInfo.bestPairs.map(p => p.join(' & ')).join(' and '), note: `Knew each other best — averaged ${pairInfo.bestPairAvg.toFixed(1)}/5 on each other` });
+  }
   const g = best(guessTotals, v => v);
-  if (g.ids.length && g.top > 0) awards.push({ icon: '🔮', title: 'Mind Reader', who: join(g.ids), note: `${g.top} cards guessed right` });
+  if (g.ids.length && g.top > 0) awards.push({ icon: 'mind_reader', title: 'Mind Reader', who: join(g.ids), note: `${g.top} cards guessed right` });
   const rk = Object.keys(rankerStats).filter(id => rankerStats[id].n > 0);
   if (rk.length >= 2) {
     const avgs = Object.fromEntries(rk.map(id => [id, rankerStats[id].sum / rankerStats[id].n]));
     const o = best(avgs, v => v), m = best(avgs, v => -v);
     if (o.ids.length < rk.length) {
-      awards.push({ icon: '📖', title: 'Open Book', who: join(o.ids), note: `Easiest to read — friends averaged ${o.top.toFixed(1)}/5` });
-      awards.push({ icon: '🕵️', title: 'Most Mysterious', who: join(m.ids), note: `Hardest to read — friends averaged ${(-m.top).toFixed(1)}/5` });
+      awards.push({ icon: 'open_book', title: 'Open Book', who: join(o.ids), note: `Easiest to read — friends averaged ${o.top.toFixed(1)}/5` });
+      awards.push({ icon: 'mysterious', title: 'Most Mysterious', who: join(m.ids), note: `Hardest to read — friends averaged ${(-m.top).toFixed(1)}/5` });
     }
   }
   return awards;
@@ -391,6 +436,7 @@ function finishGame(room) {
   room.final = {
     standings: sorted.map(s => ({ ...s, place: 1 + sorted.filter(o => o.score > s.score).length, winner: s.score === top })),
     awards: computeAwards(room),
+    pairs: computePairs(room),
   };
   broadcast(room);
 }
@@ -512,6 +558,15 @@ function act(room, p, type, body) {
       removePlayer(room, target.id);
       return OK;
     }
+    // host picks the game settings (so far: number of rounds) while still in the lobby
+    case 'settings': {
+      if (room.phase !== 'lobby' || !isHost(room, p)) return { ok: false, error: 'Only the host can change settings.' };
+      const r = Math.round(Number(body.rounds));
+      if (!Number.isFinite(r) || r < 1 || r > MAX_ROUNDS) return { ok: false, error: `Pick between 1 and ${MAX_ROUNDS} rounds.` };
+      room.rounds = r;
+      broadcast(room);
+      return OK;
+    }
     case 'playAgain': {
       if (room.phase !== 'final' || !isHost(room, p)) return { ok: false };
       clearTimer(room);
@@ -562,13 +617,24 @@ function readJson(req) {
   });
 }
 
+const ASSET_TYPES = { png: 'image/png', svg: 'image/svg+xml', webp: 'image/webp', jpg: 'image/jpeg', jpeg: 'image/jpeg', woff2: 'font/woff2', woff: 'font/woff', ttf: 'font/ttf', otf: 'font/otf' };
 function serveStatic(req, res, pathname) {
   let entry = STATIC[pathname];
+  // pictures (/icons/x.png) and fonts (/fonts/x.woff2): plain file names only, known extensions only
+  const am = !entry && pathname.match(/^\/(icons|fonts)\/([A-Za-z0-9_-][A-Za-z0-9._-]*)\.([A-Za-z0-9]+)$/);
+  if (am && ASSET_TYPES[am[3].toLowerCase()]) entry = [am[1] + '/' + am[2] + '.' + am[3], ASSET_TYPES[am[3].toLowerCase()]];
+  if (pathname === '/icons.json') {   // which replacement pictures have been dropped into public/icons
+    return fs.readdir(path.join(PUBLIC, 'icons'), (err, files) => {
+      const names = err ? [] : files.filter(f => /\.png$/i.test(f)).map(f => f.replace(/\.png$/i, ''));
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify(names));
+    });
+  }
   if (!entry && /^\/[A-Za-z]{4}\/?$/.test(pathname)) entry = STATIC['/']; // invite links: /KFTB
   if (pathname === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }
   if (!entry) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Not found'); }
   fs.readFile(path.join(PUBLIC, entry[0]), (err, data) => {
-    if (err) { res.writeHead(500, { 'Content-Type': 'text/plain' }); return res.end('Error'); }
+    if (err) { res.writeHead(err.code === 'ENOENT' ? 404 : 500, { 'Content-Type': 'text/plain' }); return res.end(err.code === 'ENOENT' ? 'Not found' : 'Error'); }
     res.writeHead(200, { 'Content-Type': entry[1], 'Cache-Control': 'no-cache', 'Content-Length': data.length });
     res.end(req.method === 'HEAD' ? undefined : data);
   });

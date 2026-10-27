@@ -8,7 +8,7 @@ Each turn one player gets 5 random cards and ranks them from **1 (favorite)** to
 
 - Guessers get **+1 point for every card placed in exactly the right spot**.
 - The ranker gets **+3 for each guesser who goes 5/5** (the bonus is only for the ranker, so it pays to rank honestly instead of trying to be tricky).
-- 3 rounds. Everyone ranks once per round. Most points wins.
+- The host picks the number of rounds (default 3). Everyone ranks once per round. Most points wins.
 - Ranker has 1:00, guessers have 1:30.
 
 ## Run it on your computer
@@ -40,7 +40,7 @@ Free-tier notes:
 
 **The cards** are in `cards.json` — a plain list of text. Replace it with your own (at least 5, but you'll want 100+ so cards don't repeat much; a hand never contains the same card twice). Restart the server after editing.
 
-**Game settings** can be changed with environment variables (on Render: *Environment* tab), or by editing the `CFG` block at the top of `server.js`:
+**Other game settings** can be changed with environment variables (on Render: *Environment* tab), or by editing the `CFG` block at the top of `server.js`. (`ROUNDS` is only the starting value now; the host picks it on the settings page.)
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -60,12 +60,25 @@ Free-tier notes:
 ## Look & feel
 
 - **Logo:** `public/logo.png` (and `public/icon.png` for the browser tab). Replace those files to change it.
-- **Font:** Barriecito, loaded from Google Fonts, so phones need an internet connection to see it. Without one the game falls back to a similar handwriting-style font and still works fine.
+- **Font:** Bobby Jones. It is a paid font, so put your licensed font file in `public/fonts/` as `BobbyJones.woff2` (or `.woff`, `.ttf`, `.otf`). See the README in that folder. Until it's there the game uses Barriecito (from Google Fonts), then a similar handwriting-style font.
+- **Pictures instead of emojis:** drop PNG files into `public/icons/` using the names listed in the README there (trophy, gold, silver, bronze, thinking, lock, eyes, crown, sound_on, sound_off, mind_reader, open_book, mysterious, friends). A picture is used as soon as its file exists; until then the game shows an emoji.
 - **Colors:** all in the `:root` block at the top of `public/style.css`. The background is the logo blue; red and green are used for wrong and right.
 - **Handwriting effect:** headings are "written" in letter by letter by a small function in `public/app.js` (`scribbleEl`). It switches itself off for people who have reduced motion turned on.
+
+## Game settings
+
+When the host taps **Create a game**, a settings page opens first. For now it has one setting: **how many rounds** (1 to 10, everyone ranks once per round). The host can reopen it any time from the lobby with **Game settings**, until the game starts.
+
+## Hiding your ranking
+
+While the others are guessing, the ranker sees their own list with a **Hide my ranking** button. Hidden, each line turns into a dark bar, so nobody can read your phone over your shoulder. The choice is remembered for your next turn. It only changes your own screen.
+
+## End of game: who knows who best
+
+The final screen shows a "Best Friends" award for the pair who read each other best, a line for each player naming the person they guessed best, and a grid of everyone against everyone (average cards right out of 5).
 
 ## Files
 
 - `server.js` — the whole game server (rooms, turns, timers, scoring)
 - `cards.json` — the deck
-- `public/` — the phone interface (`index.html`, `style.css`, `app.js`, `logo.png`, `icon.png`)
+- `public/` — the phone interface (`index.html`, `style.css`, `app.js`, `logo.png`, `icon.png`), plus `fonts/` and `icons/` for your font and replacement pictures
