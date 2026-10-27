@@ -1,9 +1,16 @@
 /* Best guess? — flat, no gradients. Palette is built from the logo blue (#6ca6db). */
-/* Bobby Jones: put the font file in public/fonts (see the README there). Until then the next font is used. */
+/* Patrick Hand: self-hosted hand-drawn marker-style font from Google Fonts
+   (public/fonts/PatrickHand.woff2). It is first in the --hand stack below. */
+/* Bobby Jones: no font files are included, so its @font-face block simply falls
+   through to the next font in the stack. */
 @font-face {
   font-family: "Bobby Jones"; font-weight: 400; font-style: normal; font-display: swap;
   src: local("Bobby Jones"), url("/fonts/BobbyJones.woff2") format("woff2"), url("/fonts/BobbyJones.woff") format("woff"),
        url("/fonts/BobbyJones.ttf") format("truetype"), url("/fonts/BobbyJones.otf") format("opentype");
+}
+@font-face {
+    font-family: "Patrick Hand"; font-weight: 400; font-style: normal; font-display: swap;
+    src: local("Patrick Hand"), url("/fonts/PatrickHand.woff2") format("woff2");
 }
 :root {
   --blue: #6ca6db;      /* page background (the logo blue) */
@@ -19,7 +26,7 @@
   --shadow: 0 4px 0 var(--ink);
   --out2: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 2px 2px 0 var(--ink), -2px -2px 0 var(--ink), 2px -2px 0 var(--ink), -2px 2px 0 var(--ink);
   --out3: 3px 0 0 var(--ink), -3px 0 0 var(--ink), 0 3px 0 var(--ink), 0 -3px 0 var(--ink), 3px 3px 0 var(--ink), -3px -3px 0 var(--ink), 3px -3px 0 var(--ink), -3px 3px 0 var(--ink);
-  --hand: "Bobby Jones", "Barriecito", "Chalkboard SE", "Marker Felt", "Comic Sans MS", "Comic Neue", cursive;
+  --hand: "Patrick Hand", "Bobby Jones", "Barriecito", "Chalkboard SE", "Marker Felt", "Comic Sans MS", "Comic Neue", cursive;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html { -webkit-text-size-adjust: 100%; }
