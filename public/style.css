@@ -5,13 +5,11 @@
   src: local("Bobby Jones"), url("/fonts/BobbyJones.woff2") format("woff2"), url("/fonts/BobbyJones.woff") format("woff"),
        url("/fonts/BobbyJones.ttf") format("truetype"), url("/fonts/BobbyJones.otf") format("opentype");
 }
-/* Patrick Hand: self-hosted hand-drawn marker-style font from Google Fonts
-   (public/fonts/PatrickHand.woff2). It is first in the --hand stack below. */
+
 @font-face {
   font-family: "Patrick Hand"; font-weight: 400; font-style: normal; font-display: swap;
   src: local("Patrick Hand"), url("/fonts/PatrickHand.woff2") format("woff2");
 }
-
 :root {
   --blue: #6ca6db;      /* page background (the logo blue) */
   --blue-l: #a9cdee;    /* light tint: empty slots, tracks */
@@ -251,6 +249,11 @@ details.how li { margin-bottom: 6px; }
 .final.won .trophy { opacity: 1; }
 .trophy { font-size: 90px; text-align: center; line-height: 1; animation: float 2.4s ease-in-out infinite; margin-top: 10px; }
 #ftitle { font-size: clamp(34px, 11vw, 48px); text-align: center; line-height: 1.05; color: #fff; text-shadow: var(--out2), 0 5px 0 var(--ink); }
+#ftitle { transition: opacity .45s; min-height: 1.1em; }
+#ftitle.out { opacity: 0; }
+#ftitle.long { font-size: clamp(28px, 8.6vw, 40px); }
+#fsub { text-align: center; font-size: 22px; color: #fff; text-shadow: var(--out2); margin-top: -2px; opacity: 0; transition: opacity .6s; }
+#fsub.in { opacity: 1; }
 #ftitle.drum { animation: throb .5s infinite; }
 .frows { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .frow { display: flex; align-items: center; gap: 10px; background: var(--paper); border: 3px solid var(--ink); border-radius: 16px; padding: 10px; box-shadow: 0 4px 0 var(--ink); opacity: 0; }

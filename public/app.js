@@ -63,7 +63,7 @@ function playFile(name, vol = 1, endAt = 0) {
   const a = ac(); if (!a) return false;
   const g = a.createGain(); g.gain.value = vol; g.connect(a.destination);
   const s = a.createBufferSource(); s.buffer = b; s.connect(g);
-  if (name === 'fanfare' || name === 'win' || name === 'sad') { try { if (curLong) curLong.stop(); } catch (e) { /* ignore */ } curLong = s; }
+  if (name === 'fanfare' || name === 'win' || name === 'sad' || name === 'lastbuild') { try { if (curLong) curLong.stop(); } catch (e) { /* ignore */ } curLong = s; }
   if (name.startsWith('drum')) { try { if (curDrum) curDrum.stop(); } catch (e) { /* ignore */ } curDrum = s; }
   if (!endAt) s.start(); else if (endAt >= b.duration) s.start(a.currentTime + endAt - b.duration);
   else s.start(a.currentTime, b.duration - endAt);
@@ -75,6 +75,7 @@ const sfx0 = {
   good() { tone(660, 0.12, 'square', 0.07); tone(990, 0.2, 'square', 0.07, 0.1); },
   bad() { tone(200, 0.3, 'sawtooth', 0.08, 0, 90); },
   sad() { [392, 370, 349, 311].forEach((f, i) => tone(f, 0.4, 'sawtooth', 0.07, i * 0.3, f * 0.96)); },
+  lastbuild() { tone(110, 11, 'sawtooth', 0.05, 0, 55); },
   win() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.24, 'triangle', 0.16, i * 0.13)); tone(1047, 1.2, 'triangle', 0.18, 0.55); tone(1319, 1.2, 'triangle', 0.12, 0.55); tone(1568, 1.2, 'triangle', 0.1, 0.55); },
   fanfare() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.24, 'triangle', 0.16, i * 0.13)); tone(1047, 0.7, 'triangle', 0.18, 0.55); tone(1319, 0.7, 'triangle', 0.12, 0.55); },
   tick() { tone(1300, 0.04, 'square', 0.04); },
@@ -609,7 +610,7 @@ function mountReveal() {
       ${tallyHTML(R)}
       ${hostBar(skipLabel)}
     </section>`;
-    sfx.drum(R.stepMs || 3400); buzz([40, 60, 40, 60, 40]);
+    sfx.drum(R.stepMs || 3400, R.rank === 1 ? 'drum_long' : 'drum'); buzz([40, 60, 40, 60, 40]);
     bindHost();
     return;
   }
@@ -683,7 +684,7 @@ function pairsHTML(P) {
     <div class="matrix" style="grid-template-columns:34px repeat(${P.cols.length}, 1fr)">${head}${body}</div>
     <small class="mcap">Each row is a guesser, each column is the person they were guessing. Average cards right out of 5.</small>`;
 }
-const ANNOUNCE_MS = 2800, WINNER_DRUM_MS = 5400;   // time per place, and the length of the long drumroll
+const MID_DRUM_MS = 3500;   // drumroll before 3rd, 2nd, ... place (the other podium timings are in mountFinal)
 function mountFinal() {
   const F = S.final, n = F.standings.length;
   const top = n ? F.standings[0].score : 0;
@@ -692,7 +693,7 @@ function mountFinal() {
   app.innerHTML = `
   <section class="screen final">
     <div class="trophy">${ic('trophy')}</div>
-    <div id="ftitle">The final results…</div>
+    <div id="ftitle">&nbsp;</div><div id="fsub">What a terrible performance</div>
     <div class="frows">${F.standings.map((s, i) => {
       const w = top ? Math.max(6, Math.round(s.score / top * 100)) : 6;
       return `<div class="frow ${s.winner ? 'win' : ''}"><span class="fplace">${medals[s.place - 1] || s.place}</span>${avatar(s.name)}
@@ -705,26 +706,47 @@ function mountFinal() {
       <button class="linkbtn" id="leaveBtn2">Leave room</button>
     </div>
   </section>`;
-  // Podium announcement: last place first, one at a time, then a long drumroll before the winner(s).
-  const root = $('.final'), title = $('#ftitle'), rows = [...document.querySelectorAll('.frow')];
-  const say = (html, drumming) => { title.classList.toggle('drum', !!drumming); title.innerHTML = html; scribbleEl(title, 0); };
+  // Podium announcement. Intro, then last place (sad build-up with write-up), then the middle places with the usual
+  // drumroll, then first place (the win music plays as the build-up). Only last and first get a write-up.
+  const root = $('.final'), title = $('#ftitle'), sub = $('#fsub'), rows = [...document.querySelectorAll('.frow')];
+  const say = (html, o = {}) => { title.classList.toggle('long', !!o.long); title.innerHTML = html; title.classList.remove('out'); scribbleEl(title, 0); };
+  const fade = () => title.classList.add('out');
   const ord = k => { const v = k % 100; return k + (v >= 11 && v <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' })[k % 10] || 'th'); };
-  const lows = F.standings.map((s, i) => i).filter(i => !F.standings[i].winner).reverse();   // last place first
-  lows.forEach((i, k) => {
-    const s = F.standings[i], t0 = 300 + k * ANNOUNCE_MS;
-    later(() => say(i === n - 1 ? 'In last place…' : `In ${ord(s.place)} place…`), t0);
-    later(() => { rows[i].classList.add('show'); if (k === 0) sfx.sad(); else sfx.ding(); buzz(30); }, t0 + 1500);
+  const nm = i => esc(F.standings[i].name);
+  const lows = F.standings.map((s, i) => i).filter(i => !F.standings[i].winner);   // best of the non-winners first
+  let t = 0;
+  say('Now let’s see who placed where', { long: true });
+  t += 3600; later(fade, t - 500);
+  if (lows.length) {                                    // ---- last place
+    const i = lows[lows.length - 1], T0 = t;
+    later(() => sfx.lastbuild(), T0);
+    later(() => say('In dead last place.', { long: true }), T0 + 300);   later(fade, T0 + 3500);
+    later(() => say('The absolute worst player.', { long: true }), T0 + 4100);   later(fade, T0 + 7400);
+    later(() => say('The person who knows you the very worst', { long: true }), T0 + 7900);   later(fade, T0 + 10900);
+    later(() => { say(nm(i)); sub.classList.add('in'); rows[i].classList.add('show'); sfx.sad(); buzz([200, 60, 200]); }, T0 + 11500);
+    t = T0 + 11500 + 3800;
+    later(() => { sub.classList.remove('in'); fade(); }, t - 500);
+    lows.pop();
+  }
+  lows.reverse().forEach(i => {                         // ---- the middle places: usual drumroll, no write-up
+    const s = F.standings[i], T0 = t;
+    later(() => { say(`In ${ord(s.place)} place…`); sfx.drum(MID_DRUM_MS); }, T0);
+    later(() => { rows[i].classList.add('show'); say(nm(i)); sfx.ding(); buzz(30); }, T0 + MID_DRUM_MS);
+    t = T0 + MID_DRUM_MS + 1800; later(fade, t - 450);
   });
-  const P = 300 + lows.length * ANNOUNCE_MS, W = P + WINNER_DRUM_MS;
-  later(() => { say('AND THE WINNER IS…', true); sfx.drum(WINNER_DRUM_MS, 'drum_long'); buzz([60, 80, 60, 80, 60, 80, 60]); }, P);
+  const W0 = t;                                         // ---- first place: the win music is the build-up
+  later(() => { sfx.win(); say('In first place', { long: true }); buzz([60, 80, 60, 80, 60]); }, W0);   later(fade, W0 + 3700);
+  later(() => say('Beating everyone else', { long: true }), W0 + 4200);   later(fade, W0 + 7900);
+  later(() => say('Proving their supremacy', { long: true }), W0 + 8400);   later(fade, W0 + 11600);
+  const W = W0 + 12200;
   later(() => {
     root.classList.add('won');
-    say(winners.length > 1 ? `${winners.map(esc).join(' & ')}<br>tie for the win!` : `${esc(winners[0] || '')} wins!`);
+    say(winners.length > 1 ? winners.map(esc).join(' &amp; ') : esc(winners[0] || ''));
     rows.forEach((r, i) => { if (F.standings[i].winner) r.classList.add('show'); });
-    sfx.win(); confetti(240); buzz([80, 40, 80, 40, 200]); flash('#ffffffcc');
+    confetti(240); buzz([80, 40, 80, 40, 200]); flash('#ffffffcc');
     [900, 1800, 2700].forEach(d => later(() => confetti(90, 'rain'), d));
   }, W);
-  later(() => { ['#awards', '#pairs'].forEach(q => { const a = $(q); if (a) a.classList.add('in'); }); const h = $('#fhost'); if (h) h.hidden = false; }, W + 1800);
+  later(() => { ['#awards', '#pairs'].forEach(q => { const a = $(q); if (a) a.classList.add('in'); }); const h = $('#fhost'); if (h) h.hidden = false; }, W + 2500);
   const again = $('#againBtn'); if (again) again.onclick = () => act('playAgain');
   $('#leaveBtn2').onclick = async () => { await act('leave'); closeStream(); saveSession(null); location.href = '/'; };
 }
