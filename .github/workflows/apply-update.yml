@@ -1,0 +1,42 @@
+name: Apply best-guess update from zip (one-off)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: List zip contents
+        run: unzip -l best-guess__3.zip
+
+      - name: Extract zip over repo root
+        run: |
+          set -e
+          unzip -o best-guess__3.zip
+          test -d rank-reveal || { echo "top folder rank-reveal/ not found"; ls -la; exit 1; }
+          cp -r rank-reveal/. .
+          rm -rf rank-reveal best-guess__3.zip
+          echo "--- changed files ---"
+          git status --short
+
+      - name: Verify key files
+        run: |
+          python3 -c "import json; d=json.load(open('cards.json')); print('cards.json entries:', len(d) if isinstance(d,list) else type(d))"
+          echo "--- public/sounds ---"
+          ls public/sounds | head -40
+          echo "--- public/fonts ---"
+          ls public/fonts
+          grep -m1 -- '--hand' public/style.css || true
+
+      - name: Commit and push
+        run: |
+          git config user.name "jackofharts-glitch"
+          git config user.email "jackofharts-glitch@users.noreply.github.com"
+          git add -A
+          git commit -m "Apply Best guess? update from best-guess__3.zip (zip cards.json, sounds, icons)" || echo "nothing to commit"
+          git push
