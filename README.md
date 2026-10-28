@@ -60,7 +60,7 @@ Free-tier notes:
 ## Look & feel
 
 - **Logo:** `public/logo.png` (and `public/icon.png` for the browser tab). Replace those files to change it.
-- **Font:** Patrick Hand, a free hand-drawn marker-style font from Google Fonts, self-hosted in `public/fonts/` as `PatrickHand.woff2`. If it ever fails to load, the game falls back to Barriecito (from Google Fonts), then a similar handwriting-style font. (The `@font-face` entry for the paid Bobby Jones font is still in `public/style.css`, but no Bobby Jones files are included, so it is skipped.)
+- **Font:** Bobby Jones. It is a paid font, so put your licensed font file in `public/fonts/` as `BobbyJones.woff2` (or `.woff`, `.ttf`, `.otf`). See the README in that folder. Until it's there the game uses Barriecito (from Google Fonts), then a similar handwriting-style font.
 - **Pictures instead of emojis:** drop PNG files into `public/icons/` using the names listed in the README there (trophy, gold, silver, bronze, thinking, lock, eyes, crown, sound_on, sound_off, mind_reader, open_book, mysterious, friends). A picture is used as soon as its file exists; until then the game shows an emoji.
 - **Colors:** all in the `:root` block at the top of `public/style.css`. The background is the logo blue; red and green are used for wrong and right.
 - **Handwriting effect:** headings are "written" in letter by letter by a small function in `public/app.js` (`scribbleEl`). It switches itself off for people who have reduced motion turned on.

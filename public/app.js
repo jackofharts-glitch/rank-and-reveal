@@ -46,15 +46,46 @@ function tone(freq, dur = 0.15, type = 'sine', vol = 0.15, when = 0, slideTo = 0
   o.connect(g); g.connect(a.destination);
   o.start(t); o.stop(t + dur + 0.03);
 }
-const sfx = {
+// Sound files: drop public/sounds/<name>.mp3 and it replaces the built-in beeps automatically.
+const BUF = {};
+let curDrum = null, curLong = null;
+function loadSounds() {
+  return fetch('/sounds.json').then(r => r.json()).then(names => Promise.all(names.map(n =>
+    fetch('/sounds/' + n + '.mp3').then(r => r.arrayBuffer()).then(ab => new Promise(ok => {
+      const a = ac(); if (!a) return ok();
+      a.decodeAudioData(ab, b => { BUF[n] = b; ok(); }, () => ok());
+    })).catch(() => {})))).catch(() => {});
+}
+// Plays file `name` if present. With `endAt` (seconds) the END of the file lands at that moment, so a drumroll hits its climax right on the reveal.
+function playFile(name, vol = 1, endAt = 0) {
+  const b = BUF[name]; if (!b) return false;
+  if (muted) return true;
+  const a = ac(); if (!a) return false;
+  const g = a.createGain(); g.gain.value = vol; g.connect(a.destination);
+  const s = a.createBufferSource(); s.buffer = b; s.connect(g);
+  if (name === 'fanfare' || name === 'win' || name === 'sad') { try { if (curLong) curLong.stop(); } catch (e) { /* ignore */ } curLong = s; }
+  if (name.startsWith('drum')) { try { if (curDrum) curDrum.stop(); } catch (e) { /* ignore */ } curDrum = s; }
+  if (!endAt) s.start(); else if (endAt >= b.duration) s.start(a.currentTime + endAt - b.duration);
+  else s.start(a.currentTime, b.duration - endAt);
+  return true;
+}
+const sfx0 = {
   drum(ms) { let t = 0, gap = 0.17; while (t < ms / 1000 - 0.12) { tone(120, 0.1, 'triangle', 0.22, t, 55); t += gap; gap = Math.max(0.05, gap * 0.92); } },
   ding() { tone(880, 0.3, 'sine', 0.18); tone(1320, 0.4, 'sine', 0.12, 0.08); },
   good() { tone(660, 0.12, 'square', 0.07); tone(990, 0.2, 'square', 0.07, 0.1); },
   bad() { tone(200, 0.3, 'sawtooth', 0.08, 0, 90); },
   sad() { [392, 370, 349, 311].forEach((f, i) => tone(f, 0.4, 'sawtooth', 0.07, i * 0.3, f * 0.96)); },
+  win() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.24, 'triangle', 0.16, i * 0.13)); tone(1047, 1.2, 'triangle', 0.18, 0.55); tone(1319, 1.2, 'triangle', 0.12, 0.55); tone(1568, 1.2, 'triangle', 0.1, 0.55); },
   fanfare() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.24, 'triangle', 0.16, i * 0.13)); tone(1047, 0.7, 'triangle', 0.18, 0.55); tone(1319, 0.7, 'triangle', 0.12, 0.55); },
   tick() { tone(1300, 0.04, 'square', 0.04); },
   lock() { tone(520, 0.08, 'square', 0.08); tone(780, 0.16, 'square', 0.08, 0.07); },
+};
+const sfx = {};
+for (const k of Object.keys(sfx0)) sfx[k] = (...args) => {
+  if (k !== 'tick' && k !== 'lock' && k !== 'drum' && curDrum) { try { curDrum.stop(); } catch (e) { /* ignore */ } curDrum = null; }
+  if (k === 'drum') { if (playFile(args[1] || 'drum', 1, args[0] / 1000)) return; }
+  else if (playFile(k)) return;
+  sfx0[k](...args);
 };
 const buzz = p => { try { if (!muted && navigator.vibrate) navigator.vibrate(p); } catch (e) { /* ignore */ } };
 document.addEventListener('pointerdown', () => ac(), { once: true });
@@ -210,7 +241,7 @@ function showHome(msg) {
   app.innerHTML = `
   <section class="screen home">
     <img class="logo" src="/logo.png" alt="Best guess?">
-    <p class="tag" data-delay="1000">You're opinion is always right.<br>But does everyone else know that? Can you guess everyone elses wrong preferences??</p>
+    <p class="tag" data-delay="1000">Rank 5 things from favorite to least favorite.<br>Everyone else guesses your list. Drama ensues.</p>
     ${msg ? `<div class="notice">${esc(msg)}</div>` : ''}
     <div class="panel">
       <label class="lbl" for="name">Your name</label>
@@ -578,7 +609,7 @@ function mountReveal() {
       ${tallyHTML(R)}
       ${hostBar(skipLabel)}
     </section>`;
-    sfx.drum(R.stepMs || 1900); buzz([40, 60, 40, 60, 40]);
+    sfx.drum(R.stepMs || 3400); buzz([40, 60, 40, 60, 40]);
     bindHost();
     return;
   }
@@ -610,7 +641,8 @@ function mountReveal() {
   sfx.ding(); buzz(80); flash('#ffffffaa');
   g.forEach((x, i) => later(() => { if (x.correct) { sfx.good(); buzz(25); } else sfx.bad(); }, base + i * per));
   const after = base + g.length * per;
-  if (g.length && (c === g.length || (R.finale && c > 0))) later(() => { confetti(R.finale ? 220 : 120); sfx.fanfare(); buzz([60, 40, 60, 40, 120]); }, after);
+  if (g.length && c === g.length) later(() => { confetti(R.finale ? 220 : 120); sfx.fanfare(); buzz([60, 40, 60, 40, 120]); }, after);
+  else if (g.length && R.finale && c > 0) later(() => { confetti(160); sfx.ding(); buzz([60, 40, 60]); }, after);
   else if (g.length && c === 0) later(() => { shake(); sfx.sad(); buzz(200); }, after);
   bindHost();
 }
@@ -651,20 +683,20 @@ function pairsHTML(P) {
     <div class="matrix" style="grid-template-columns:34px repeat(${P.cols.length}, 1fr)">${head}${body}</div>
     <small class="mcap">Each row is a guesser, each column is the person they were guessing. Average cards right out of 5.</small>`;
 }
+const ANNOUNCE_MS = 2800, WINNER_DRUM_MS = 5400;   // time per place, and the length of the long drumroll
 function mountFinal() {
-  const F = S.final, n = F.standings.length, step = 800;
+  const F = S.final, n = F.standings.length;
   const top = n ? F.standings[0].score : 0;
   const winners = F.standings.filter(s => s.winner).map(s => s.name);
   const medals = [ic('gold'), ic('silver'), ic('bronze')];
-  const T = n * step + 1100;
   app.innerHTML = `
   <section class="screen final">
     <div class="trophy">${ic('trophy')}</div>
-    <div id="ftitle" class="drum">AND THE WINNER IS…</div>
+    <div id="ftitle">The final results…</div>
     <div class="frows">${F.standings.map((s, i) => {
-      const delay = (n - 1 - i) * step + 500, w = top ? Math.max(6, Math.round(s.score / top * 100)) : 6;
-      return `<div class="frow ${s.winner ? 'win' : ''}" style="animation-delay:${delay}ms"><span class="fplace">${medals[s.place - 1] || s.place}</span>${avatar(s.name)}
-        <div class="fmid"><b>${esc(s.name)}</b><div class="fbar"><i style="width:${w}%;animation-delay:${delay + 250}ms"></i></div></div><span class="fscore">${s.score}</span></div>`;
+      const w = top ? Math.max(6, Math.round(s.score / top * 100)) : 6;
+      return `<div class="frow ${s.winner ? 'win' : ''}"><span class="fplace">${medals[s.place - 1] || s.place}</span>${avatar(s.name)}
+        <div class="fmid"><b>${esc(s.name)}</b><div class="fbar"><i style="width:${w}%"></i></div></div><span class="fscore">${s.score}</span></div>`;
     }).join('')}</div>
     <div class="awards" id="awards">${F.awards.map(a => `<div class="award"><span class="aicon">${ic(a.icon)}</span><div><b>${a.title}: ${esc(a.who)}</b><small>${esc(a.note)}</small></div></div>`).join('')}</div>
     <div class="pairs" id="pairs">${pairsHTML(F.pairs)}</div>
@@ -673,17 +705,26 @@ function mountFinal() {
       <button class="linkbtn" id="leaveBtn2">Leave room</button>
     </div>
   </section>`;
-  sfx.drum(T - 300);
-  F.standings.forEach((s, i) => later(() => { sfx.ding(); buzz(30); }, (n - 1 - i) * step + 500));
+  // Podium announcement: last place first, one at a time, then a long drumroll before the winner(s).
+  const root = $('.final'), title = $('#ftitle'), rows = [...document.querySelectorAll('.frow')];
+  const say = (html, drumming) => { title.classList.toggle('drum', !!drumming); title.innerHTML = html; scribbleEl(title, 0); };
+  const ord = k => { const v = k % 100; return k + (v >= 11 && v <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' })[k % 10] || 'th'); };
+  const lows = F.standings.map((s, i) => i).filter(i => !F.standings[i].winner).reverse();   // last place first
+  lows.forEach((i, k) => {
+    const s = F.standings[i], t0 = 300 + k * ANNOUNCE_MS;
+    later(() => say(i === n - 1 ? 'In last place…' : `In ${ord(s.place)} place…`), t0);
+    later(() => { rows[i].classList.add('show'); if (k === 0) sfx.sad(); else sfx.ding(); buzz(30); }, t0 + 1500);
+  });
+  const P = 300 + lows.length * ANNOUNCE_MS, W = P + WINNER_DRUM_MS;
+  later(() => { say('AND THE WINNER IS…', true); sfx.drum(WINNER_DRUM_MS, 'drum_long'); buzz([60, 80, 60, 80, 60, 80, 60]); }, P);
   later(() => {
-    const t = $('#ftitle'); if (!t) return;
-    t.classList.remove('drum');
-    t.innerHTML = winners.length > 1 ? `${winners.map(esc).join(' & ')}<br>tie for the win!` : `${esc(winners[0] || '')} wins!`;
-    scribbleEl(t, 0);
-    sfx.fanfare(); confetti(240); buzz([80, 40, 80, 40, 200]); flash('#ffffffcc');
+    root.classList.add('won');
+    say(winners.length > 1 ? `${winners.map(esc).join(' & ')}<br>tie for the win!` : `${esc(winners[0] || '')} wins!`);
+    rows.forEach((r, i) => { if (F.standings[i].winner) r.classList.add('show'); });
+    sfx.win(); confetti(240); buzz([80, 40, 80, 40, 200]); flash('#ffffffcc');
     [900, 1800, 2700].forEach(d => later(() => confetti(90, 'rain'), d));
-  }, T);
-  later(() => { ['#awards', '#pairs'].forEach(q => { const a = $(q); if (a) a.classList.add('in'); }); const h = $('#fhost'); if (h) h.hidden = false; }, T + 700);
+  }, W);
+  later(() => { ['#awards', '#pairs'].forEach(q => { const a = $(q); if (a) a.classList.add('in'); }); const h = $('#fhost'); if (h) h.hidden = false; }, W + 1800);
   const again = $('#againBtn'); if (again) again.onclick = () => act('playAgain');
   $('#leaveBtn2').onclick = async () => { await act('leave'); closeStream(); saveSession(null); location.href = '/'; };
 }
@@ -691,9 +732,10 @@ function mountFinal() {
 /* ---------- boot ---------- */
 if (session) {
   app.innerHTML = '<section class="screen"><p class="sub center">Joining your game…</p></section>';
-  loadIcons().then(() => { paintSound(); rejoin(); });
+  Promise.all([loadIcons(), loadSounds()]).then(() => { paintSound(); rejoin(); });
 } else {
   showHome();
   loadIcons().then(paintSound);
+  loadSounds();
 }
 })();

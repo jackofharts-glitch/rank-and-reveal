@@ -20,13 +20,13 @@ const CFG = {
   RANK_SECONDS: num(process.env.RANK_SECONDS, 60),  // time for the ranker
   GUESS_SECONDS: num(process.env.GUESS_SECONDS, 90),// time for the guessers
   PERFECT_BONUS: num(process.env.PERFECT_BONUS, 3), // ranker bonus for EACH guesser who goes 5/5
-  MAX_PLAYERS: 10,
+  MAX_PLAYERS: 8,
   MAX_ROUNDS: 10,
   MIN_PLAYERS: 2,
   HAND: 5,
   // reveal pacing (milliseconds)
-  SUSPENSE_MS: num(process.env.SUSPENSE_MS, 1900),
-  FINALE_SUSPENSE_MS: num(process.env.FINALE_SUSPENSE_MS, 3400),
+  SUSPENSE_MS: num(process.env.SUSPENSE_MS, 3400),
+  FINALE_SUSPENSE_MS: num(process.env.FINALE_SUSPENSE_MS, 5400),
   SHOW_MS: num(process.env.SHOW_MS, 3800),
   SHOW_PER_GUESSER_MS: num(process.env.SHOW_PER_GUESSER_MS, 250),
   SUMMARY_MS: num(process.env.SUMMARY_MS, 15000),
@@ -617,15 +617,22 @@ function readJson(req) {
   });
 }
 
-const ASSET_TYPES = { png: 'image/png', svg: 'image/svg+xml', webp: 'image/webp', jpg: 'image/jpeg', jpeg: 'image/jpeg', woff2: 'font/woff2', woff: 'font/woff', ttf: 'font/ttf', otf: 'font/otf' };
+const ASSET_TYPES = { png: 'image/png', svg: 'image/svg+xml', webp: 'image/webp', jpg: 'image/jpeg', jpeg: 'image/jpeg', mp3: 'audio/mpeg', m4a: 'audio/mp4', ogg: 'audio/ogg', wav: 'audio/wav', woff2: 'font/woff2', woff: 'font/woff', ttf: 'font/ttf', otf: 'font/otf' };
 function serveStatic(req, res, pathname) {
   let entry = STATIC[pathname];
   // pictures (/icons/x.png) and fonts (/fonts/x.woff2): plain file names only, known extensions only
-  const am = !entry && pathname.match(/^\/(icons|fonts)\/([A-Za-z0-9_-][A-Za-z0-9._-]*)\.([A-Za-z0-9]+)$/);
+  const am = !entry && pathname.match(/^\/(icons|fonts|sounds)\/([A-Za-z0-9_-][A-Za-z0-9._-]*)\.([A-Za-z0-9]+)$/);
   if (am && ASSET_TYPES[am[3].toLowerCase()]) entry = [am[1] + '/' + am[2] + '.' + am[3], ASSET_TYPES[am[3].toLowerCase()]];
   if (pathname === '/icons.json') {   // which replacement pictures have been dropped into public/icons
     return fs.readdir(path.join(PUBLIC, 'icons'), (err, files) => {
       const names = err ? [] : files.filter(f => /\.png$/i.test(f)).map(f => f.replace(/\.png$/i, ''));
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify(names));
+    });
+  }
+  if (pathname === '/sounds.json') {   // which sound files have been dropped into public/sounds
+    return fs.readdir(path.join(PUBLIC, 'sounds'), (err, files) => {
+      const names = err ? [] : files.filter(f => /\.mp3$/i.test(f)).map(f => f.replace(/\.mp3$/i, ''));
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify(names));
     });

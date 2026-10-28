@@ -1,16 +1,9 @@
 /* Best guess? — flat, no gradients. Palette is built from the logo blue (#6ca6db). */
-/* Patrick Hand: self-hosted hand-drawn marker-style font from Google Fonts
-   (public/fonts/PatrickHand.woff2). It is first in the --hand stack below. */
-/* Bobby Jones: no font files are included, so its @font-face block simply falls
-   through to the next font in the stack. */
+/* Bobby Jones: put the font file in public/fonts (see the README there). Until then the next font is used. */
 @font-face {
   font-family: "Bobby Jones"; font-weight: 400; font-style: normal; font-display: swap;
   src: local("Bobby Jones"), url("/fonts/BobbyJones.woff2") format("woff2"), url("/fonts/BobbyJones.woff") format("woff"),
        url("/fonts/BobbyJones.ttf") format("truetype"), url("/fonts/BobbyJones.otf") format("opentype");
-}
-@font-face {
-    font-family: "Patrick Hand"; font-weight: 400; font-style: normal; font-display: swap;
-    src: local("Patrick Hand"), url("/fonts/PatrickHand.woff2") format("woff2");
 }
 :root {
   --blue: #6ca6db;      /* page background (the logo blue) */
@@ -26,7 +19,7 @@
   --shadow: 0 4px 0 var(--ink);
   --out2: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 2px 2px 0 var(--ink), -2px -2px 0 var(--ink), 2px -2px 0 var(--ink), -2px 2px 0 var(--ink);
   --out3: 3px 0 0 var(--ink), -3px 0 0 var(--ink), 0 3px 0 var(--ink), 0 -3px 0 var(--ink), 3px 3px 0 var(--ink), -3px -3px 0 var(--ink), 3px -3px 0 var(--ink), -3px 3px 0 var(--ink);
-  --hand: "Patrick Hand", "Bobby Jones", "Barriecito", "Chalkboard SE", "Marker Felt", "Comic Sans MS", "Comic Neue", cursive;
+  --hand: "Bobby Jones", "Barriecito", "Chalkboard SE", "Marker Felt", "Comic Sans MS", "Comic Neue", cursive;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html { -webkit-text-size-adjust: 100%; }
@@ -247,17 +240,21 @@ details.how li { margin-bottom: 6px; }
 
 /* final */
 .final { align-items: stretch; }
+.final .trophy { opacity: 0; transition: opacity .5s; }
+.final.won .trophy { opacity: 1; }
 .trophy { font-size: 90px; text-align: center; line-height: 1; animation: float 2.4s ease-in-out infinite; margin-top: 10px; }
 #ftitle { font-size: clamp(34px, 11vw, 48px); text-align: center; line-height: 1.05; color: #fff; text-shadow: var(--out2), 0 5px 0 var(--ink); }
 #ftitle.drum { animation: throb .5s infinite; }
 .frows { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
-.frow { display: flex; align-items: center; gap: 10px; background: var(--paper); border: 3px solid var(--ink); border-radius: 16px; padding: 10px; box-shadow: 0 4px 0 var(--ink); opacity: 0; animation: rowIn .6s both; }
+.frow { display: flex; align-items: center; gap: 10px; background: var(--paper); border: 3px solid var(--ink); border-radius: 16px; padding: 10px; box-shadow: 0 4px 0 var(--ink); opacity: 0; }
+.frow.show { animation: rowIn .6s both; }
 .frow.win { background: var(--green-l); border-color: var(--green-d); box-shadow: 0 5px 0 var(--green-d); }
 .fplace { font-size: 28px; width: 36px; text-align: center; }
 .fmid { flex: 1; min-width: 0; }
 .fmid b { display: block; margin-bottom: 4px; font-size: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fbar { height: 10px; border-radius: 99px; background: var(--blue-xl); border: 2px solid var(--ink); overflow: hidden; }
-.fbar i { display: block; height: 100%; background: var(--blue-d); transform-origin: left; animation: grow 1s both; }
+.fbar i { display: block; height: 100%; background: var(--blue-d); transform-origin: left; transform: scaleX(0); }
+.frow.show .fbar i { animation: grow 1s .25s both; transform: none; }
 .frow.win .fbar i { background: var(--green-d); }
 .fscore { font-size: 28px; min-width: 40px; text-align: right; }
 #fhost { display: flex; flex-direction: column; gap: 10px; }
