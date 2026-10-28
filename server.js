@@ -20,7 +20,7 @@ const CFG = {
   RANK_SECONDS: num(process.env.RANK_SECONDS, 60),  // time for the ranker
   GUESS_SECONDS: num(process.env.GUESS_SECONDS, 90),// time for the guessers
   PERFECT_BONUS: num(process.env.PERFECT_BONUS, 3), // ranker bonus for EACH guesser who goes 5/5
-  MAX_PLAYERS: 8,
+  MAX_PLAYERS: 12,
   MAX_ROUNDS: 10,
   MIN_PLAYERS: 2,
   HAND: 5,
