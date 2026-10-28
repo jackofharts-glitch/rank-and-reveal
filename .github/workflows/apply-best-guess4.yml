@@ -1,0 +1,44 @@
+name: Apply best-guess4 update (temporary one-shot)
+on:
+  workflow_dispatch:
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract zip and apply only the three files
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/bg4 && mkdir -p /tmp/bg4
+          unzip -o best-guess4-only.zip -d /tmp/bg4
+          echo '--- zip contents ---'
+          find /tmp/bg4 -type f | sort
+          N=$(find /tmp/bg4 -type f | wc -l)
+          if [ "$N" -ne 3 ]; then echo "ERROR: expected exactly 3 files in zip, found $N"; exit 1; fi
+          APP=$(find /tmp/bg4 -type f -name app.js)
+          CSS=$(find /tmp/bg4 -type f -name style.css)
+          MP3=$(find /tmp/bg4 -type f -name lastbuild.mp3)
+          if [ -z "$APP" ] || [ -z "$CSS" ] || [ -z "$MP3" ]; then echo 'ERROR: missing expected file(s) in zip'; exit 1; fi
+          for f in "$APP" "$CSS" "$MP3"; do
+            if [ "$(printf '%s\n' "$f" | wc -l)" -ne 1 ]; then echo "ERROR: ambiguous match: $f"; exit 1; fi
+          done
+          cp "$APP" public/app.js
+          cp "$CSS" public/style.css
+          mkdir -p public/sounds
+          cp "$MP3" public/sounds/lastbuild.mp3
+          grep -q 'Patrick Hand' public/style.css || { echo 'ERROR: Patrick Hand missing from style.css'; exit 1; }
+          grep -q 'lastbuild' public/app.js || { echo 'ERROR: lastbuild not referenced in app.js'; exit 1; }
+          rm -f best-guess4-only.zip .github/workflows/apply-best-guess4.yml
+          echo '--- change set ---'
+          git status --porcelain
+          CHANGED=$(git status --porcelain | awk '{print $2}' | sort)
+          EXPECTED=$(printf '%s\n' .github/workflows/apply-best-guess4.yml best-guess4-only.zip public/app.js public/sounds/lastbuild.mp3 public/style.css)
+          if [ "$CHANGED" != "$EXPECTED" ]; then echo 'ERROR: unexpected change set'; printf '%s\n' "$CHANGED"; exit 1; fi
+          git checkout -B main
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Apply best-guess4 update: replace public/app.js and public/style.css, add public/sounds/lastbuild.mp3'
+          git push origin main
