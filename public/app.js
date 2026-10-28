@@ -242,7 +242,7 @@ function showHome(msg) {
   app.innerHTML = `
   <section class="screen home">
     <img class="logo" src="/logo.png" alt="Best guess?">
-    <p class="tag" data-delay="1000">Your opinion is always right<br>but can you guess everyone else's wrong opinions?</p>
+    <p class="tag" data-delay="1000">Your opinion is always right,<br>but can you guess everyone else's wrong opinions?</p>
     ${msg ? `<div class="notice">${esc(msg)}</div>` : ''}
     <div class="panel">
       <label class="lbl" for="name">Your name</label>
@@ -620,7 +620,7 @@ function mountReveal() {
   const g = pos.guesses, c = g.filter(x => x.correct).length, base = 900, per = 320;
   let verdict = '';
   if (g.length) {
-    if (c === 0) verdict = 'NOBODY saw that coming!';
+    if (c === 0) verdict = 'What a travesty. NOBODY saw that coming';
     else if (c === g.length) verdict = g.length === 1 ? 'Nailed it!' : 'EVERYONE knew!';
     else if (c === 1) verdict = `Only ${esc(g.find(x => x.correct).name)} knew!`;
     else verdict = `${c} of ${g.length} got it!`;
@@ -721,8 +721,8 @@ function mountFinal() {
     const i = lows[lows.length - 1], T0 = t;
     later(() => sfx.lastbuild(), T0);
     later(() => say('In dead last place.', { long: true }), T0 + 300);   later(fade, T0 + 3500);
-    later(() => say('The absolute worst player.', { long: true }), T0 + 4100);   later(fade, T0 + 7400);
-    later(() => say('The person who knows you the very worst', { long: true }), T0 + 7900);   later(fade, T0 + 10900);
+    later(() => say('With the very lowest score.', { long: true }), T0 + 4100);   later(fade, T0 + 7400);
+    later(() => say('The absolute worst player', { long: true }), T0 + 7900);   later(fade, T0 + 10900);
     later(() => { say(nm(i)); sub.classList.add('in'); rows[i].classList.add('show'); sfx.sad(); buzz([200, 60, 200]); }, T0 + 11500);
     t = T0 + 11500 + 3800;
     later(() => { sub.classList.remove('in'); fade(); }, t - 500);
